@@ -11,3 +11,6 @@ ruff==0.17.1
 gazetteer-matcher==1.1.0
 hassil==3.12.1
 home-assistant-intents==2026.10.6
+# 与 manifest.json 的 requirements 保持一致：集成在运行时由 HA 安装，
+# 跑测试时这里要显式装，否则 conftest 导入 a2a 包就会失败。
+websockets==15.0.1

@@ -15,6 +15,8 @@ permissions:
 jobs:
   validate:
     name: Validate the repository for HACS
+    # hacs/action 只校验 public 仓库；仓库转公开后这个 job 会自动开始执行。
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
