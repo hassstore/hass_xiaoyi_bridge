@@ -1,0 +1,154 @@
+{
+  "title": "小艺桥接",
+  "config": {
+    "step": {
+      "user": {
+        "title": "把 Home Assistant 接入小艺",
+        "description": "填写在[小艺开放平台]({docs_url})创建的 OpenClaw 模式智能体的 AK/SK 凭证与 Agent ID。保存前会先用小艺服务器验证凭证是否有效。",
+        "data": {
+          "ws_url1": "主 WebSocket 服务器地址",
+          "ws_url2": "备用 WebSocket 服务器地址",
+          "ak": "Access Key（AK）",
+          "sk": "Secret Key（SK）",
+          "agent_id": "小艺 Agent ID"
+        },
+        "data_description": {
+          "ws_url1": "默认：wss://hag.cloud.huawei.com/openclaw/v1/ws/link",
+          "ws_url2": "高可用的第二端点，留空则使用默认值",
+          "ak": "在小艺开放平台创建凭证时一次性显示的 Key",
+          "sk": "创建凭证时一次性显示的安全密钥",
+          "agent_id": "OpenClaw 模式智能体的 Agent ID"
+        }
+      },
+      "reauth_confirm": {
+        "title": "重新配置小艺凭证",
+        "description": "智能体 {agent_id} 的凭证已失效。请在小艺开放平台重新创建 AK/SK（旧凭证会立即失效），并粘贴到下面。",
+        "data": {
+          "ak": "新的 Access Key（AK）",
+          "sk": "新的 Secret Key（SK）"
+        }
+      },
+      "reconfigure": {
+        "title": "修改小艺服务器地址",
+        "description": "更新智能体 {agent_id} 使用的 WebSocket 地址，保存前会先验证新地址是否可用。",
+        "data": {
+          "ws_url1": "主 WebSocket 服务器地址",
+          "ws_url2": "备用 WebSocket 服务器地址"
+        }
+      }
+    },
+    "error": {
+      "missing_required": "AK、SK、Agent ID 均为必填项",
+      "invalid_url": "不是合法的 WebSocket 地址（必须以 ws:// 或 wss:// 开头）",
+      "invalid_auth": "小艺服务器拒绝了这组凭证（请检查 AK/SK，并确认智能体已上架）",
+      "cannot_connect": "当前无法连接小艺服务器"
+    },
+    "abort": {
+      "already_configured": "该 Agent ID 已经配置过",
+      "reauth_successful": "重新认证成功"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "小艺桥接选项",
+        "description": "调整语音指令的处理方式。保存后桥接会重载一次并重新连接。",
+        "data": {
+          "language": "处理语言",
+          "ha_agent_id": "HA 对话代理 ID（留空使用默认）",
+          "api_id": "推送 API ID（用于主动推送）",
+          "status_updates": "发送处理状态更新",
+          "heartbeat_interval": "心跳间隔（秒）",
+          "reconnect_max": "最大重连次数"
+        },
+        "data_description": {
+          "language": "传给 Assist 管道的语言；除非小艺使用的语言与 HA 界面不同，否则保持“跟随 Home Assistant”",
+          "ha_agent_id": "可选，指定对话代理 ID，例如 conversation.openai_conversation",
+          "api_id": "小艺开放平台上的 API ID，send_push 服务需要它",
+          "status_updates": "向小艺回发“正在处理”“处理完成”等状态",
+          "heartbeat_interval": "应用心跳周期；小艺服务端会关闭没有流量的长连接，建议不超过 30 秒",
+          "reconnect_max": "达到该次数后暂停 15 分钟再继续重试"
+        }
+      }
+    },
+    "error": {
+      "unknown_agent": "不存在该 ID 的 Home Assistant 对话代理"
+    }
+  },
+  "selector": {
+    "language": {
+      "options": {
+        "auto": "跟随 Home Assistant",
+        "zh_hans": "简体中文 (zh-Hans)",
+        "zh_hant": "繁體中文 (zh-Hant)",
+        "en": "English",
+        "ja": "日本語",
+        "ko": "한국어",
+        "de": "Deutsch",
+        "fr": "Français"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connection": {
+        "name": "连接状态"
+      }
+    }
+  },
+  "services": {
+    "send_push": {
+      "name": "发送推送通知",
+      "description": "通过小艺 agent-webhook 向小艺用户主动推送通知。需要推送 API ID，以及从小艺消息中获取到的 push ID。",
+      "fields": {
+        "message": {
+          "name": "消息",
+          "description": "通知正文内容。"
+        },
+        "push_text": {
+          "name": "推送文本",
+          "description": "展示给用户的简短通知文本，默认取消息前 50 个字符。"
+        },
+        "session_id": {
+          "name": "会话 ID",
+          "description": "推送目标的小艺会话，默认使用最近出现过的会话。"
+        },
+        "api_id": {
+          "name": "API ID",
+          "description": "覆盖集成选项里配置的推送 API ID。"
+        },
+        "entry_id": {
+          "name": "配置条目 ID",
+          "description": "配置了多个条目时，指定要使用的条目。"
+        }
+      }
+    },
+    "reconnect": {
+      "name": "重新连接",
+      "description": "断开两条 A2A WebSocket 连接并重新连接。",
+      "fields": {
+        "entry_id": {
+          "name": "配置条目 ID",
+          "description": "配置了多个条目时，指定要使用的条目。"
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "push_not_configured": {
+      "message": "推送尚未配置完成，缺少：{missing}。请在集成选项里设置推送 API ID，并确保已经收到过小艺消息以获得 push ID。"
+    },
+    "push_failed": {
+      "message": "小艺推送接口没有接受这条通知。"
+    },
+    "unknown_entry": {
+      "message": "不存在 ID 为 {entry_id} 的小艺桥接配置条目。"
+    },
+    "entry_not_loaded": {
+      "message": "小艺桥接配置条目 {entry_id} 尚未加载。"
+    },
+    "no_loaded_entry": {
+      "message": "没有已加载的小艺桥接配置条目。"
+    }
+  }
+}

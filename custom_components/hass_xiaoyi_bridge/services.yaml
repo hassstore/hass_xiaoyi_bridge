@@ -1,0 +1,50 @@
+send_push:
+  name: Send push notification
+  description: >
+    Push a notification to 小艺 users out of band, through the XiaoYi
+    agent-webhook. Requires the push API ID and a push ID observed from an
+    incoming 小艺 message.
+  fields:
+    message:
+      name: Message
+      description: The text carried in the notification body.
+      required: true
+      selector:
+        text:
+    push_text:
+      name: Push text
+      description: Short notification text shown to the user. Defaults to the first 50 characters of the message.
+      required: false
+      selector:
+        text:
+    session_id:
+      name: Session ID
+      description: XiaoYi session to push to. Defaults to the most recently seen session.
+      required: false
+      selector:
+        text:
+    api_id:
+      name: API ID
+      description: Overrides the push API ID configured in the integration options.
+      required: false
+      selector:
+        text:
+    entry_id:
+      name: Config entry ID
+      description: Targets a specific config entry when several are configured.
+      required: false
+      selector:
+        config_entry:
+          integration: hass_xiaoyi_bridge
+
+reconnect:
+  name: Reconnect
+  description: Close both A2A WebSocket connections and connect again.
+  fields:
+    entry_id:
+      name: Config entry ID
+      description: Targets a specific config entry when several are configured.
+      required: false
+      selector:
+        config_entry:
+          integration: hass_xiaoyi_bridge

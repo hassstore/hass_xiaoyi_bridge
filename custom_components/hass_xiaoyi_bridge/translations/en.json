@@ -1,0 +1,154 @@
+{
+  "title": "XiaoYi Bridge",
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect Home Assistant to 小艺",
+        "description": "Enter the AK/SK credentials and Agent ID of an OpenClaw-mode agent created on the [小艺开放平台]({docs_url}). The credentials are verified against the XiaoYi servers before the entry is created.",
+        "data": {
+          "ws_url1": "Primary WebSocket server URL",
+          "ws_url2": "Backup WebSocket server URL",
+          "ak": "Access Key (AK)",
+          "sk": "Secret Key (SK)",
+          "agent_id": "XiaoYi Agent ID"
+        },
+        "data_description": {
+          "ws_url1": "Default: wss://hag.cloud.huawei.com/openclaw/v1/ws/link",
+          "ws_url2": "Second endpoint for high availability; leave empty to use the default",
+          "ak": "Key shown once when the credential is created on the 小艺开放平台",
+          "sk": "Secret key shown once when the credential is created",
+          "agent_id": "Agent ID of the OpenClaw-mode agent"
+        }
+      },
+      "reauth_confirm": {
+        "title": "Reconnect 小艺 credentials",
+        "description": "The credentials for agent {agent_id} stopped working. Create a new AK/SK pair on the 小艺开放平台 (the old pair is invalidated immediately) and paste it here.",
+        "data": {
+          "ak": "New Access Key (AK)",
+          "sk": "New Secret Key (SK)"
+        }
+      },
+      "reconfigure": {
+        "title": "Change XiaoYi server endpoints",
+        "description": "Update the WebSocket endpoints used for agent {agent_id}. The new endpoints are verified before they are saved.",
+        "data": {
+          "ws_url1": "Primary WebSocket server URL",
+          "ws_url2": "Backup WebSocket server URL"
+        }
+      }
+    },
+    "error": {
+      "missing_required": "AK, SK and Agent ID are all required",
+      "invalid_url": "Not a valid WebSocket URL (must start with ws:// or wss://)",
+      "invalid_auth": "The XiaoYi servers rejected these credentials (check AK/SK and that the agent is published)",
+      "cannot_connect": "Cannot reach the XiaoYi servers right now"
+    },
+    "abort": {
+      "already_configured": "This Agent ID is already configured",
+      "reauth_successful": "Reauthentication was successful"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "XiaoYi Bridge options",
+        "description": "Tune how voice commands are processed. Changes reload the bridge, so it reconnects once.",
+        "data": {
+          "language": "Processing language",
+          "ha_agent_id": "HA conversation agent ID (blank = default)",
+          "api_id": "Push API ID (for proactive notifications)",
+          "status_updates": "Send processing status updates",
+          "heartbeat_interval": "Heartbeat interval (seconds)",
+          "reconnect_max": "Maximum reconnection attempts"
+        },
+        "data_description": {
+          "language": "Language passed to the Assist pipeline; leave on “Follow Home Assistant” unless 小艺 speaks a different language than your HA UI",
+          "ha_agent_id": "Optional conversation agent ID, e.g. conversation.openai_conversation",
+          "api_id": "API ID from the 小艺开放平台, required by the send_push service",
+          "status_updates": "Send “processing” and “done” status messages back to 小艺",
+          "heartbeat_interval": "Application heartbeat period; the XiaoYi server closes idle connections, so keep it at or below 30s",
+          "reconnect_max": "Attempts before the bridge pauses for 15 minutes and tries again"
+        }
+      }
+    },
+    "error": {
+      "unknown_agent": "No Home Assistant conversation agent with this ID exists"
+    }
+  },
+  "selector": {
+    "language": {
+      "options": {
+        "auto": "Follow Home Assistant",
+        "zh_hans": "简体中文 (zh-Hans)",
+        "zh_hant": "繁體中文 (zh-Hant)",
+        "en": "English",
+        "ja": "日本語",
+        "ko": "한국어",
+        "de": "Deutsch",
+        "fr": "Français"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connection": {
+        "name": "Connection"
+      }
+    }
+  },
+  "services": {
+    "send_push": {
+      "name": "Send push notification",
+      "description": "Push a notification to 小艺 users out of band, through the XiaoYi agent-webhook. Requires the push API ID and a push ID observed from an incoming 小艺 message.",
+      "fields": {
+        "message": {
+          "name": "Message",
+          "description": "The text carried in the notification body."
+        },
+        "push_text": {
+          "name": "Push text",
+          "description": "Short notification text shown to the user. Defaults to the first 50 characters of the message."
+        },
+        "session_id": {
+          "name": "Session ID",
+          "description": "XiaoYi session to push to. Defaults to the most recently seen session."
+        },
+        "api_id": {
+          "name": "API ID",
+          "description": "Overrides the push API ID configured in the integration options."
+        },
+        "entry_id": {
+          "name": "Config entry ID",
+          "description": "Targets a specific config entry when several are configured."
+        }
+      }
+    },
+    "reconnect": {
+      "name": "Reconnect",
+      "description": "Close both A2A WebSocket connections and connect again.",
+      "fields": {
+        "entry_id": {
+          "name": "Config entry ID",
+          "description": "Targets a specific config entry when several are configured."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "push_not_configured": {
+      "message": "Push is not configured yet. Missing: {missing}. Set the push API ID in the options, and make sure a 小艺 message has been received so a push ID is known."
+    },
+    "push_failed": {
+      "message": "The XiaoYi push webhook did not accept the notification."
+    },
+    "unknown_entry": {
+      "message": "No XiaoYi Bridge config entry with ID {entry_id} exists."
+    },
+    "entry_not_loaded": {
+      "message": "The XiaoYi Bridge config entry {entry_id} is not loaded."
+    },
+    "no_loaded_entry": {
+      "message": "No XiaoYi Bridge config entry is loaded."
+    }
+  }
+}

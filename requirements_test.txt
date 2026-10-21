@@ -1,0 +1,6 @@
+# Only used by CI (.github/workflows/tests.yml) and local `pytest`.
+# Pinned so CI runs the exact same Home Assistant version as the local checkout;
+# bump it deliberately when moving to a newer Home Assistant.
+pytest-homeassistant-custom-component==0.13.373
+# Lint gate in .github/workflows/tests.yml
+ruff==0.17.1

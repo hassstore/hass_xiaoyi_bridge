@@ -1,0 +1,56 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  package:
+    name: Build and attach the HACS package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: The tag must match manifest.json
+        run: |
+          version=$(python3 -c "import json;print(json.load(open('custom_components/hass_xiaoyi_bridge/manifest.json'))['version'])")
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$version" != "$tag" ]; then
+            echo "manifest.json says $version, the tag says $tag" >&2
+            exit 1
+          fi
+
+      - name: Create HACS-compatible archive
+        run: |
+          # 清掉 __pycache__，否则会被打进发布包。
+          find custom_components/hass_xiaoyi_bridge -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+
+          # 关键：zip_release 模式下 HACS 用 async_download_zip_file()，
+          # 它把压缩包内容**原样** extractall 到 custom_components/<domain>/，
+          # 不会剥掉任何一层路径（剥路径只发生在下载 GitHub zipball 的分支）。
+          # 所以包内必须直接是 manifest.json、__init__.py、translations/ 等，
+          # 不能带 custom_components/hass_xiaoyi_bridge/ 这层前缀。
+          cd custom_components/hass_xiaoyi_bridge
+          zip -r ../../hass_xiaoyi_bridge.zip . -x '*/__pycache__/*' '*/.DS_Store'
+
+      - name: Verify the archive layout
+        run: |
+          # manifest.json 必须位于压缩包根目录，否则 HACS 装完 HA 找不到集成。
+          unzip -l hass_xiaoyi_bridge.zip | head -8
+          unzip -p hass_xiaoyi_bridge.zip manifest.json > /dev/null
+          if unzip -l hass_xiaoyi_bridge.zip | grep -q 'custom_components/'; then
+            echo "FAIL: archive has a nested custom_components/ prefix" >&2
+            exit 1
+          fi
+          if unzip -l hass_xiaoyi_bridge.zip | grep -q '__pycache__'; then
+            echo "FAIL: archive contains __pycache__" >&2
+            exit 1
+          fi
+          echo "OK: manifest.json is at the archive root"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: hass_xiaoyi_bridge.zip
+          generate_release_notes: true

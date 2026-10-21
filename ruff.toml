@@ -1,0 +1,15 @@
+# Lint configuration for this custom integration.
+#
+# ``ruff check`` (no arguments) is expected to stay clean; CI additionally runs
+# ``ruff check --select F,E9`` (the gate required by 规范 10.1).
+#
+# The rule set is intentionally the "core" one: pycodestyle errors, pyflakes,
+# isort and pyupgrade. The stricter families (BLE001 blind excepts, RUF002
+# ambiguous-unicode, S101 asserts in tests) conflict with how a Home Assistant
+# integration and this Chinese-language code base are written, so they are not
+# enabled.
+line-length = 88
+target-version = "py313"
+
+[lint]
+select = ["E4", "E7", "E9", "F", "I", "UP"]

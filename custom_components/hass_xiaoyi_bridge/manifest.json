@@ -1,0 +1,19 @@
+{
+  "domain": "hass_xiaoyi_bridge",
+  "name": "XiaoYi Bridge",
+  "codeowners": [
+    "@hassstore"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "conversation"
+  ],
+  "documentation": "https://github.com/hassstore/hass_xiaoyi_bridge",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/hassstore/hass_xiaoyi_bridge/issues",
+  "requirements": [
+    "websockets==15.0.1"
+  ],
+  "version": "2.0.0"
+}

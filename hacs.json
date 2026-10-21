@@ -1,0 +1,7 @@
+{
+  "name": "XiaoYi Bridge",
+  "homeassistant": "2025.8.0",
+  "zip_release": true,
+  "filename": "hass_xiaoyi_bridge.zip",
+  "country": "CN"
+}

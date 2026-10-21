@@ -1,0 +1,38 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: requirements_test.txt
+
+      # 带上与 HA 同版本的社区测试框架（fixtures: hass / MockConfigEntry /
+      # enable_custom_integrations），见 HA 规范 10.3。版本在 requirements_test.txt
+      # 里固定，保证 CI 与本地跑的是同一个 Home Assistant。
+      - name: Install the test harness
+        run: pip install -r requirements_test.txt
+
+      - name: Lint (pyflakes / syntax)
+        run: ruff check --select F,E9 custom_components tests
+
+      - name: Validate JSON and translation parity
+        run: python tools/check_translations.py
+
+      - name: Run the tests
+        run: pytest -q
