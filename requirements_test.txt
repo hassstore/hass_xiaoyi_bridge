@@ -4,3 +4,10 @@
 pytest-homeassistant-custom-component==0.13.373
 # Lint gate in .github/workflows/tests.yml
 ruff==0.17.1
+# ``conversation`` 是被测试集成声明的依赖，但 pytest-homeassistant-custom-component
+# 只安装 Home Assistant 核心依赖，不安装组件依赖；缺了这三个模块，测试会在
+# setup ``conversation`` 时报 ModuleNotFoundError。版本与 HA 2026.10.2 的
+# ``package_constraints.txt`` 一致。
+gazetteer-matcher==1.1.0
+hassil==3.12.1
+home-assistant-intents==2026.10.6

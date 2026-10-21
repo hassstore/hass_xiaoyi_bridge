@@ -9,7 +9,8 @@ on:
   # 手动重跑：改过仓库描述/topics 等元数据后，不必再等一周或空提交
   workflow_dispatch:
 
-permissions: {}
+permissions:
+  contents: read
 
 jobs:
   validate:
