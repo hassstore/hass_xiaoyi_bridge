@@ -273,6 +273,10 @@ class XiaoYiWebSocketManager:
         # When clawd_bot_init went out, to correlate it with an early close.
         self._init_sent_at: dict[ServerId, float] = {}
 
+        # Structure of the last inbound A2A request per server: enough to see
+        # where a push_id would live without dumping the user's text.
+        self._last_frame: dict[ServerId, dict[str, Any]] = {}
+
         # Last close code/reason per server (surfaced in diagnostics).
         self._last_close: dict[ServerId, dict[str, Any]] = {}
 
@@ -478,6 +482,7 @@ class XiaoYiWebSocketManager:
         self._last_close.clear()
         self._connected_at.clear()
         self._init_sent_at.clear()
+        self._last_frame.clear()
         self._active_servers = {"server1", "server2"}
         self._throttle.reset()
         _LOGGER.info("Disconnected from all servers")
@@ -605,6 +610,7 @@ class XiaoYiWebSocketManager:
                     round(now - state.connected_at, 1) if state.connected_at else None
                 ),
                 "last_close": self._last_close.get(server_id),
+                "last_frame": self._last_frame.get(server_id),
             }
 
         return {
@@ -1120,6 +1126,11 @@ class XiaoYiWebSocketManager:
         if is_a2a_request_message(message):
             parsed = parse_a2a_message(message)
             if parsed:
+                self._last_frame[source_server] = {
+                    "method": parsed.method,
+                    "part_kinds": [part.get("kind") for part in parsed.parts],
+                    "push_id_found": bool(parsed.push_id),
+                }
                 await self._dispatch_request(parsed, source_server)
             else:
                 _LOGGER.warning("[%s] Failed to parse A2A request", source_server)

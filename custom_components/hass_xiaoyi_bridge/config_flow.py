@@ -36,6 +36,7 @@ from .const import (
     CONF_HEARTBEAT_FIRST_DELAY,
     CONF_HEARTBEAT_INTERVAL,
     CONF_LANGUAGE,
+    CONF_PUSH_ID,
     CONF_RECONNECT_MAX,
     CONF_SINGLE_SERVER,
     CONF_SK,
@@ -48,6 +49,7 @@ from .const import (
     DEFAULT_HEARTBEAT_FIRST_DELAY,
     DEFAULT_HEARTBEAT_INTERVAL,
     DEFAULT_LANGUAGE,
+    DEFAULT_PUSH_ID,
     DEFAULT_RECONNECT_MAX,
     DEFAULT_SINGLE_SERVER,
     DEFAULT_SKIP_INIT,
@@ -139,6 +141,7 @@ def _options_schema(hass: HomeAssistant, current_agent: str) -> vol.Schema:
                 )
             ),
             vol.Optional(CONF_API_ID, default=DEFAULT_API_ID): str,
+            vol.Optional(CONF_PUSH_ID, default=DEFAULT_PUSH_ID): str,
             vol.Optional(CONF_STATUS_UPDATES, default=DEFAULT_STATUS_UPDATES): bool,
             vol.Optional(
                 CONF_HEARTBEAT_INTERVAL, default=DEFAULT_HEARTBEAT_INTERVAL
@@ -445,6 +448,7 @@ class XiaoYiBridgeOptionsFlow(OptionsFlowWithReload):
                         CONF_HA_AGENT_ID, DEFAULT_HA_AGENT_ID
                     ),
                     CONF_API_ID: options.get(CONF_API_ID, DEFAULT_API_ID),
+                    CONF_PUSH_ID: options.get(CONF_PUSH_ID, DEFAULT_PUSH_ID),
                     CONF_STATUS_UPDATES: options.get(
                         CONF_STATUS_UPDATES, DEFAULT_STATUS_UPDATES
                     ),

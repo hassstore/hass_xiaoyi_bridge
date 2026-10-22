@@ -29,6 +29,12 @@ send_push:
       required: false
       selector:
         text:
+    push_id:
+      name: Push ID
+      description: Overrides the push ID learned from incoming 小艺 messages.
+      required: false
+      selector:
+        text:
     entry_id:
       name: Config entry ID
       description: Targets a specific config entry when several are configured.

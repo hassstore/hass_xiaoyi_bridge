@@ -199,3 +199,20 @@ def test_status_update_reuses_the_request_message_id() -> None:
     detail = json.loads(message["msgDetail"])
     assert detail["id"] == "msg-1"
     assert detail["result"]["status"]["state"] == "completed"
+
+
+def test_extract_push_id_accepts_camel_case_and_other_nesting() -> None:
+    """The platform renamed the field once; the fallback keeps push working."""
+    camel = [{"kind": "data", "data": {"variables": {"systemVariables": {"pushId": "p-1"}}}}]
+    nested = [{"kind": "data", "data": {"meta": {"context": {"push_id": "p-2"}}}}]
+    assert extract_push_id(camel) == "p-1"
+    assert extract_push_id(nested) == "p-2"
+
+
+def test_parse_a2a_message_scans_the_whole_frame_for_push_id() -> None:
+    """A push_id outside params.message.parts is still picked up."""
+    payload = json.loads(json.dumps(A2A_REQUEST))
+    payload["params"]["metadata"] = {"clientInfo": {"push_id": "frame-level"}}
+    parsed = parse_a2a_message(payload)
+    assert parsed is not None
+    assert parsed.push_id == "frame-level"

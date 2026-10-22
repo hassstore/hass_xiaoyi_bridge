@@ -915,3 +915,73 @@ async def test_language_option_is_mapped_for_assist(
             hass, entry, patch_manager, make_request(), language="auto"
         )
         assert converse.call_args.kwargs["language"] is None
+
+
+async def test_send_push_falls_back_to_the_static_push_id(
+    hass: HomeAssistant, patch_manager: FakeManager
+) -> None:
+    """Without a learned push_id the configured option is used."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        entry, options={"api_id": "api-1", "push_id": "static-push"}
+    )
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    seen: list[str | None] = []
+    original_init = XiaoYiPushService.__init__
+
+    def capture(self, *args, **kwargs) -> None:
+        seen.append(kwargs.get("push_id"))
+        original_init(self, *args, **kwargs)
+
+    async def fake_send(self, text, push_text, post, timeout=10.0) -> bool:
+        return True
+
+    with (
+        patch.object(XiaoYiPushService, "__init__", capture),
+        patch.object(XiaoYiPushService, "send", fake_send),
+    ):
+        await hass.services.async_call(
+            DOMAIN, SERVICE_SEND_PUSH, {ATTR_MESSAGE: "门口有人"}, blocking=True
+        )
+
+    assert seen == ["static-push"]
+
+
+async def test_send_push_prefers_the_explicit_push_id(
+    hass: HomeAssistant, patch_manager: FakeManager
+) -> None:
+    """The service field overrides both the session and the option."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(
+        entry, options={"api_id": "api-1", "push_id": "static-push"}
+    )
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    entry.runtime_data.session_manager.set_push_id("session-1", "learned-push")
+
+    seen: list[str | None] = []
+    original_init = XiaoYiPushService.__init__
+
+    def capture(self, *args, **kwargs) -> None:
+        seen.append(kwargs.get("push_id"))
+        original_init(self, *args, **kwargs)
+
+    async def fake_send(self, text, push_text, post, timeout=10.0) -> bool:
+        return True
+
+    with (
+        patch.object(XiaoYiPushService, "__init__", capture),
+        patch.object(XiaoYiPushService, "send", fake_send),
+    ):
+        await hass.services.async_call(
+            DOMAIN,
+            SERVICE_SEND_PUSH,
+            {ATTR_MESSAGE: "门口有人", "push_id": "explicit-push"},
+            blocking=True,
+        )
+
+    assert seen == ["explicit-push"]

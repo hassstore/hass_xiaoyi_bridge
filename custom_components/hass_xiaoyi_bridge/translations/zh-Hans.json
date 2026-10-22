@@ -62,7 +62,8 @@
           "reconnect_max": "最大重连次数",
           "heartbeat_first_delay": "首次心跳延迟（秒）",
           "single_server": "只连接主端点",
-          "skip_init": "不发送 clawd_bot_init（诊断）"
+          "skip_init": "不发送 clawd_bot_init（诊断）",
+          "push_id": "推送 ID（可选，手动覆盖）"
         },
         "data_description": {
           "language": "传给 Assist 管道的语言；除非小艺使用的语言与 HA 界面不同，否则保持“跟随 Home Assistant”",
@@ -73,7 +74,8 @@
           "reconnect_max": "达到该次数后暂停 15 分钟再继续重试",
           "heartbeat_first_delay": "连接建立后多久发第一条心跳（默认 1 秒）。仅在排查“连上即断”时调大。",
           "single_server": "只连接主端点，主端点不可用时才回退到备用端点。若平台限制同一智能体只能有一个会话（两条连接互相踢），可开启。",
-          "skip_init": "诊断项：连接后不发送 clawd_bot_init。如果连接因此不再被关闭，说明是 init 帧（或其内部的 Agent ID）触发了关闭。排查完请关闭。"
+          "skip_init": "诊断项：连接后不发送 clawd_bot_init。如果连接因此不再被关闭，说明是 init 帧（或其内部的 Agent ID）触发了关闭。排查完请关闭。",
+          "push_id": "通常自动从收到的小艺消息里获取（data.variables.systemVariables.push_id）。只有在需要固定值时才手动填写。"
         }
       }
     },
@@ -126,6 +128,10 @@
         "entry_id": {
           "name": "配置条目 ID",
           "description": "配置了多个条目时，指定要使用的条目。"
+        },
+        "push_id": {
+          "name": "推送 ID",
+          "description": "手动指定推送 ID，覆盖从消息里学到的值。"
         }
       }
     },
@@ -142,7 +148,7 @@
   },
   "exceptions": {
     "push_not_configured": {
-      "message": "推送尚未配置完成，缺少：{missing}。请在集成选项里设置推送 API ID，并确保已经收到过小艺消息以获得 push ID。"
+      "message": "主动推送尚未配置，缺少：{missing}。push API ID 来自小艺开放平台；push ID 通常由收到的小艺消息下发（data.variables.systemVariables.push_id）。如果消息里没有该字段，可在集成选项或服务字段 push_id 里手动填写固定值。"
     },
     "push_failed": {
       "message": "小艺推送接口没有接受这条通知。"

@@ -19,6 +19,7 @@ CONF_HEARTBEAT_FIRST_DELAY = "heartbeat_first_delay"
 CONF_SINGLE_SERVER = "single_server"
 CONF_SKIP_INIT = "skip_init"
 CONF_API_ID = "api_id"
+CONF_PUSH_ID = "push_id"
 
 # ─── Defaults ───────────────────────────────────────────────────────────────
 DEFAULT_WS_URL_1 = "wss://hag.cloud.huawei.com/openclaw/v1/ws/link"
@@ -41,6 +42,9 @@ DEFAULT_SINGLE_SERVER = False
 # 诊断用：连接后不发送 clawd_bot_init，用来判断“连上即断”是否由该帧触发。
 DEFAULT_SKIP_INIT = False
 DEFAULT_API_ID = ""
+# 可选：静态 push_id。正常情况下 push_id 由用户消息的 data part 下发，
+# 这里只作为兜底（例如平台升级后消息里暂时没有该字段）。
+DEFAULT_PUSH_ID = ""
 
 # async_converse() 接受的 HA 语言码（BCP 47）。选项值必须是小写翻译键，
 # 因此内部用下划线写法，再经 LANGUAGE_MAP 映射成真正的语言码。
@@ -132,3 +136,4 @@ ATTR_PUSH_TEXT = "push_text"
 ATTR_SESSION_ID = "session_id"
 ATTR_API_ID = "api_id"
 ATTR_ENTRY_ID = "entry_id"
+ATTR_PUSH_ID = "push_id"

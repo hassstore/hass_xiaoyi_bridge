@@ -45,6 +45,7 @@ from .const import (
     ATTR_API_ID,
     ATTR_ENTRY_ID,
     ATTR_MESSAGE,
+    ATTR_PUSH_ID,
     ATTR_PUSH_TEXT,
     ATTR_SESSION_ID,
     AUTH_FAILURE_HINT,
@@ -55,6 +56,7 @@ from .const import (
     CONF_HEARTBEAT_FIRST_DELAY,
     CONF_HEARTBEAT_INTERVAL,
     CONF_LANGUAGE,
+    CONF_PUSH_ID,
     CONF_RECONNECT_MAX,
     CONF_SINGLE_SERVER,
     CONF_SK,
@@ -68,6 +70,7 @@ from .const import (
     DEFAULT_HEARTBEAT_FIRST_DELAY,
     DEFAULT_HEARTBEAT_INTERVAL,
     DEFAULT_LANGUAGE,
+    DEFAULT_PUSH_ID,
     DEFAULT_RECONNECT_MAX,
     DEFAULT_SINGLE_SERVER,
     DEFAULT_SKIP_INIT,
@@ -131,7 +134,13 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             CONF_API_ID, DEFAULT_API_ID
         )
         session_id = call.data.get(ATTR_SESSION_ID)
-        push_id = runtime.session_manager.get_push_id(session_id)
+        # Resolution order: explicit service field, the session the 小艺 message
+        # came from (falls back to the last seen one), then the static option.
+        push_id = (
+            call.data.get(ATTR_PUSH_ID)
+            or runtime.session_manager.get_push_id(session_id)
+            or entry.options.get(CONF_PUSH_ID, DEFAULT_PUSH_ID)
+        )
 
         service = XiaoYiPushService(
             ak=entry.data[CONF_AK],
@@ -197,6 +206,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
                 vol.Optional(ATTR_PUSH_TEXT): str,
                 vol.Optional(ATTR_SESSION_ID): str,
                 vol.Optional(ATTR_API_ID): str,
+                vol.Optional(ATTR_PUSH_ID): str,
                 vol.Optional(ATTR_ENTRY_ID): str,
             }
         ),

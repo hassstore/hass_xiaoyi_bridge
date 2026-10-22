@@ -74,6 +74,8 @@ class A2ARequestMessage:
     session_id: str
     task_id: str  # params.id
     parts: list[dict[str, Any]] = field(default_factory=list)
+    # push_id found anywhere else in the raw frame (fallback).
+    push_id_hint: str | None = None
 
     @property
     def text(self) -> str:
@@ -92,7 +94,7 @@ class A2ARequestMessage:
         小艺在 data part 的 variables.systemVariables.push_id 里带上推送 ID，
         主动推送（agent-webhook）时需要它。
         """
-        return extract_push_id(self.parts)
+        return extract_push_id(self.parts) or self.push_id_hint
 
 
 # ─── Parsing ─────────────────────────────────────────────────────────────────
@@ -120,6 +122,7 @@ def parse_a2a_message(raw: dict[str, Any]) -> A2ARequestMessage | None:
             session_id=session_id,
             task_id=params.get("id", ""),
             parts=parts,
+            push_id_hint=find_push_id(raw),
         )
     except Exception as err:
         _LOGGER.error("Failed to parse A2A message: %s", err)
@@ -142,8 +145,47 @@ def extract_text_from_parts(parts: list[dict[str, Any]]) -> str:
     return "".join(texts)
 
 
+# 平台下发的字段名大小写不统一（push_id / pushId），位置也可能变化，
+# 因此除了文档路径外，再做一次有界的递归查找作为兜底。
+PUSH_ID_KEYS = ("push_id", "pushId")
+
+
+def find_push_id(payload: Any, depth: int = 0) -> str | None:
+    """Find the first push_id-like value in a nested payload.
+
+    Args:
+        payload: Any JSON-decoded structure.
+        depth: Current recursion depth (bounded to avoid pathological frames).
+
+    Returns:
+        The push id string, or None.
+    """
+    if depth > 6:
+        return None
+    if isinstance(payload, dict):
+        for key in PUSH_ID_KEYS:
+            value = payload.get(key)
+            if isinstance(value, str) and value:
+                return value
+        for value in payload.values():
+            found = find_push_id(value, depth + 1)
+            if found:
+                return found
+    elif isinstance(payload, list):
+        for item in payload:
+            found = find_push_id(item, depth + 1)
+            if found:
+                return found
+    return None
+
+
 def extract_push_id(parts: list[dict[str, Any]]) -> str | None:
     """Extract push_id from A2A data parts.
+
+    The documented location is
+    ``data.variables.systemVariables.push_id``; the recursive fallback also
+    accepts ``pushId`` and other nesting so a platform-side rename does not
+    silently disable proactive push.
 
     Args:
         parts: List of A2A message parts.
@@ -152,16 +194,17 @@ def extract_push_id(parts: list[dict[str, Any]]) -> str | None:
         Push ID string if found, None otherwise.
     """
     for part in parts:
-        if part.get("kind") == "data":
-            data = part.get("data", {})
-            push_id = (
-                data.get("variables", {})
-                .get("systemVariables", {})
-                .get("push_id")
-            )
-            if push_id:
-                return push_id
-    return None
+        if part.get("kind") != "data":
+            continue
+        data = part.get("data", {})
+        push_id = (
+            data.get("variables", {})
+            .get("systemVariables", {})
+            .get("push_id")
+        )
+        if push_id:
+            return push_id
+    return find_push_id(parts)
 
 
 # ─── Helper: UUID Generation ─────────────────────────────────────────────────

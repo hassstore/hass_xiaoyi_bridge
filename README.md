@@ -92,6 +92,7 @@
 | 处理语言 `language` | 跟随 Home Assistant | 传给 Assist 管线的语言；`auto` 跟随 `hass.config.language`，也可固定为 zh-Hans / zh-Hant / en / ja / ko / de / fr |
 | 对话代理 `ha_agent_id` | 空 | **下拉选择**当前已加载的对话代理（列表来自 `conversation` 组件，实时刷新）；留空使用默认 Assist 代理，也可手动输入未列出的 ID |
 | 推送 API ID `api_id` | 空 | 小艺开放平台智能体页面上用于 **agent-webhook 主动推送** 的 API ID；只有 `hass_xiaoyi_bridge.send_push` 服务需要它，不用主动推送可留空 |
+| 推送 ID `push_id` | 空 | 通常自动从收到的小艺消息里获取（`data.variables.systemVariables.push_id`）；只有需要固定值时才手填，服务字段 `push_id` 优先级更高 |
 | 发送处理状态更新 `status_updates` | 开 | 处理过程中向小艺回发“正在处理 / 处理完成”等状态 |
 | 心跳间隔 `heartbeat_interval` | 20 秒 | 应用层心跳周期，可设 10–120 秒；小艺服务端会关闭没有应用层流量的长连接，建议不超过 30 秒 |
 | 最大重连次数 `reconnect_max` | 50 | 达到该次数后暂停 15 分钟再继续重试（不会永久放弃） |
@@ -324,6 +325,29 @@ python tools/xiaoyi_probe.py --ak <AK> --sk <SK> --agent-id <AGENT_ID>
 ```text
 XiaoYi refused the handshake: server1 rejected the handshake (HTTP 401: badRequest: Resource is not found or param error)
 ```
+
+### send_push 报“缺少 push_id”
+
+`push_id` 是小艺用来定位“推给哪个用户/会话”的 ID，正常情况下由**用户发来的消息**带下来：
+
+```json
+{"kind": "data", "data": {"variables": {"systemVariables": {"push_id": "..."}}}}
+```
+
+如果已经对话过仍提示缺失，说明这条消息里没有该字段（平台版本差异），有三种处理：
+
+1. 2.0.6 起会做**递归兜底**（兼容 `pushId`、其他嵌套位置），多数情况可直接恢复；
+2. 在集成选项里填 **推送 ID `push_id`** 固定值；
+3. 调用服务时用字段覆盖：
+
+```yaml
+service: hass_xiaoyi_bridge.send_push
+data:
+  message: 门口有人按门铃
+  push_id: <你的 push_id>
+```
+
+诊断数据里新增了 `last_frame`（最近一条入站消息的 `method`、`part_kinds`、`push_id_found`），下载诊断即可确认消息里到底有没有该字段，不会包含你的语音内容。
 
 ### 小艺没有响应
 
