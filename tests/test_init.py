@@ -985,3 +985,56 @@ async def test_send_push_prefers_the_explicit_push_id(
         )
 
     assert seen == ["explicit-push"]
+
+
+async def test_missing_push_id_is_visible_in_the_log(
+    hass: HomeAssistant, patch_manager: FakeManager, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Debug logging says whether the incoming message carried a push_id."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    with (
+        patch(
+            "custom_components.hass_xiaoyi_bridge.async_converse",
+            AsyncMock(return_value=FakeConversationResult("好的")),
+        ),
+        caplog.at_level(logging.DEBUG),
+    ):
+        await bridge_one_message(hass, entry, patch_manager, make_request())
+
+    assert "no push_id" in caplog.text
+    assert "part kinds: ['text']" in caplog.text
+
+
+async def test_received_push_id_is_logged(
+    hass: HomeAssistant, patch_manager: FakeManager, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A message carrying one records it and says so."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    parsed = make_request()
+    parsed.parts = [
+        {"kind": "text", "text": "开灯"},
+        {
+            "kind": "data",
+            "data": {"variables": {"systemVariables": {"push_id": "push-xyz"}}},
+        },
+    ]
+
+    with (
+        patch(
+            "custom_components.hass_xiaoyi_bridge.async_converse",
+            AsyncMock(return_value=FakeConversationResult("好的")),
+        ),
+        caplog.at_level(logging.DEBUG),
+    ):
+        await bridge_one_message(hass, entry, patch_manager, parsed)
+
+    assert "carries a push_id" in caplog.text
+    assert entry.runtime_data.session_manager.get_push_id("session-1") == "push-xyz"

@@ -452,6 +452,18 @@ async def _handle_a2a_message(
     push_id = parsed.push_id
     if push_id:
         session_mgr.set_push_id(session_id, push_id)
+        _LOGGER.debug(
+            "Message carries a push_id (%d chars): proactive push is available",
+            len(push_id),
+        )
+    else:
+        # 只有平台在消息里带上 push_id 时才能主动推送；把 parts 结构记下来，
+        # 便于确认“已对话但仍缺 push_id”到底是平台没发还是路径变了。
+        _LOGGER.debug(
+            "Message has no push_id (part kinds: %s); proactive push stays "
+            "unavailable until one arrives or a fixed value is configured",
+            [part.get("kind") for part in parsed.parts],
+        )
     session_mgr.update_session(
         session_id, task_id=task_id, message_id=message_id
     )
