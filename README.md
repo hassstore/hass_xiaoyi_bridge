@@ -266,7 +266,32 @@ POST https://hag.cloud.huawei.com/open-ability-agent/v1/agent-webhook
 
 ### 小艺连上后立刻断开 / 一直重连
 
-多为智能体未上架、测试白名单未包含你的账号，或 AK/SK 错误、创建凭证时选错了平台类型。请到小艺开放平台确认智能体已发布、白名单已配置，然后重新创建凭证（旧凭证会立即失效），并在集成上执行重新认证。
+先看日志里的 `WebSocket closed by the server ... (code=..., reason=...)`：
+
+- **握手阶段就被拒（HTTP 401）**：见下一节「配置时报『小艺服务器拒绝了这组凭证』」。
+- **握手成功、随后被关闭（`code=1000`）**：说明 **AK/SK 是有效的**，问题在智能体或平台侧，按顺序排查：
+  1. 智能体已上架（「发布真机测试」），当前账号在测试白名单内；
+  2. **同一智能体只能有一个客户端在线**——确认没有第二个 Home Assistant、另一台设备上的集成实例，或 OpenClaw 插件同时连接同一个 agentId；
+  3. 平台限流（短时间反复重连会被拒绝一段时间）。
+- 集成对这种情况**不会**再弹「重新认证」：握手已经通过，凭证是好的；它只会按指数退避重连，并输出一条节流告警说明原因。
+
+想区分「裸连接能否保持」「是心跳触发的关闭还是本来就被关闭」，运行：
+
+```bash
+# 只连接、不发任何帧
+python tools/xiaoyi_probe.py --ak <AK> --sk <SK> --agent-id <AGENT_ID> --mode hold
+
+# 连接 + clawd_bot_init（+0.2s）
+python tools/xiaoyi_probe.py ... --mode init
+
+# 与集成完全一致：init + 1s 后首次心跳、之后每 20s
+python tools/xiaoyi_probe.py ... --mode full
+
+# 两个端点同时保持，验证是否允许同一智能体多连接
+python tools/xiaoyi_probe.py ... --mode hold --dual
+```
+
+脚本会逐帧打印服务端下发的消息、关闭码与存活时长。
 
 ### 配置时报「小艺服务器拒绝了这组凭证」
 

@@ -303,37 +303,35 @@ async def test_mismatched_agent_id_is_discarded(
 # ─── Failure escalation ──────────────────────────────────────────────────────
 
 
-async def test_repeated_fast_closes_escalate_to_auth_failure(
+async def test_repeated_fast_closes_warn_but_do_not_force_reauth(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Three instant disconnects become one actionable reauth escalation."""
-    patch_connect(monkeypatch, [FakeConnection("close") for _ in range(8)])
+    """A post-handshake close is not an authentication failure.
+
+    The handshake already succeeded, so showing a re-authenticate card (and
+    pausing reconnects for 10 minutes) was a false alarm: the gateway closes
+    with code 1000 for unpublished agents, duplicate connections and rate
+    limiting alike.
+    """
+    patch_connect(monkeypatch, [FakeConnection("close") for _ in range(12)])
     manager = make_manager()
 
-    with caplog.at_level(logging.ERROR):
+    with caplog.at_level(logging.WARNING):
         await manager.connect()
-        # Let the reconnect chain run through the fast closes.
-        for _ in range(20):
+        for _ in range(30):
             await asyncio.sleep(0.02)
-            if manager.test_calls["auth"]:
+            if (
+                manager._state1.fast_close_count >= 3
+                and manager._state2.fast_close_count >= 3
+            ):
                 break
 
-    # Both servers escalate; each does it exactly once.
-    assert manager.test_calls["auth"] == [1, 1]
-    assert "server1" in manager._auth_pause_until
-    assert "server2" in manager._auth_pause_until
-    auth_errors = [
-        r for r in caplog.records if "keeps closing the connection" in r.getMessage()
-    ]
-    # One actionable error per server, not one per attempt.
-    assert len(auth_errors) == 2
-    assert "published" in auth_errors[0].getMessage()
-
-    # Reconnects stay paused while the auth backoff is active.
-    task_before = manager._reconnect_task1
-    manager._schedule_reconnect("server1")
-    assert manager._reconnect_task1 is task_before
-
+    assert manager.test_calls["auth"] == []
+    assert manager._auth_pause_until == {}
+    assert manager._last_close["server1"]["code"] == 1000
+    assert "WebSocket closed by the server" in caplog.text
+    assert "code=1000" in caplog.text
+    assert "closes the connection right after" in caplog.text
     await manager.disconnect()
 
 

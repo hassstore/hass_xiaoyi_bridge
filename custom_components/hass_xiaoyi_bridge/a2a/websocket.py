@@ -261,6 +261,9 @@ class XiaoYiWebSocketManager:
         # must not schedule a reconnect when it is cancelled for that reason.
         self._no_reconnect: set[ServerId] = set()
 
+        # Last close code/reason per server (surfaced in diagnostics).
+        self._last_close: dict[ServerId, dict[str, Any]] = {}
+
         # Servers whose certificate chain could not be verified (IP endpoints).
         # Remembered so a reconnect does not repeat the doomed verified attempt.
         self._tls_degraded: set[ServerId] = set()
@@ -426,6 +429,7 @@ class XiaoYiWebSocketManager:
         self._auth_pause_until.clear()
         self._no_reconnect.clear()
         self._tls_degraded.clear()
+        self._last_close.clear()
         self._throttle.reset()
         _LOGGER.info("Disconnected from all servers")
         self._notify_listeners()
@@ -543,7 +547,7 @@ class XiaoYiWebSocketManager:
         """Return a snapshot of the connection state for diagnostics."""
         now = time.monotonic()
 
-        def _server(state: ServerState) -> dict[str, Any]:
+        def _server(server_id: ServerId, state: ServerState) -> dict[str, Any]:
             return {
                 "connected": state.connected,
                 "ready": state.ready,
@@ -551,12 +555,13 @@ class XiaoYiWebSocketManager:
                 "seconds_since_connect": (
                     round(now - state.connected_at, 1) if state.connected_at else None
                 ),
+                "last_close": self._last_close.get(server_id),
             }
 
         return {
             "ready": self.is_ready,
-            "server1": _server(self._state1),
-            "server2": _server(self._state2),
+            "server1": _server("server1", self._state1),
+            "server2": _server("server2", self._state2),
             "sessions": self.session_mgr.debug_state(),
             "suppressed_log_messages": self._throttle.suppressed_total(),
         }
@@ -851,7 +856,7 @@ class XiaoYiWebSocketManager:
                     _LOGGER.error("[%s] Error handling message: %s", server_id, err)
 
         except ConnectionClosed as err:
-            _LOGGER.info("[%s] WebSocket closed: %s", server_id, err)
+            self._log_close(server_id, err)
         except asyncio.CancelledError:
             _LOGGER.debug("[%s] Receive loop cancelled", server_id)
         except Exception as err:
@@ -907,9 +912,67 @@ class XiaoYiWebSocketManager:
                 WS_FAST_CLOSE_THRESHOLD,
             )
             if state.fast_close_count >= WS_FAST_CLOSE_THRESHOLD:
-                self._handle_auth_failure(server_id)
+                self._handle_fast_close(server_id)
         else:
             state.fast_close_count = 0
+
+    def _log_close(self, server_id: ServerId, err: ConnectionClosed) -> None:
+        """Report why a WebSocket ended, including the close code.
+
+        The 小艺 gateway closes sessions gracefully (code 1000) for reasons that
+        have nothing to do with the credentials — the agent being unpublished,
+        the same agent already connected elsewhere, or rate limiting. The code
+        and reason are the only way to tell those apart.
+
+        Args:
+            server_id: Server whose socket closed.
+            err: The ``ConnectionClosed`` exception from websockets.
+        """
+        close = getattr(err, "rcvd", None)
+        code = getattr(close, "code", None)
+        reason = getattr(close, "reason", "") or ""
+        state = self._state1 if server_id == "server1" else self._state2
+        lifetime = (
+            time.monotonic() - state.connected_at if state.connected_at else 0.0
+        )
+        self._last_close[server_id] = {
+            "code": code,
+            "reason": reason,
+            "lifetime": round(lifetime, 2),
+        }
+        self._throttle.warning(
+            f"{server_id}/closed",
+            "[%s] WebSocket closed by the server after %.1fs "
+            "(code=%s, reason=%s)",
+            server_id,
+            lifetime,
+            code,
+            reason or "-",
+        )
+
+    def _handle_fast_close(self, server_id: ServerId) -> None:
+        """Explain a connection that the server closes right after connect.
+
+        This is deliberately **not** treated as an authentication failure: the
+        handshake already succeeded, so the AK/SK are valid. Treating it as one
+        showed a re-authenticate card to users whose credentials were fine.
+
+        Args:
+            server_id: Server that keeps closing the connection.
+        """
+        self._throttle.warning(
+            f"{server_id}/fast_close",
+            "[%s] The server closes the connection right after it is "
+            "established (close code %s). The credentials are accepted, so "
+            "this is about the agent, not the AK/SK. Check: (1) the agent is "
+            "published and this account is on its test whitelist, (2) the same "
+            "agent is not connected by another client (a second Home "
+            "Assistant, the OpenClaw plugin, ...), (3) the platform is not "
+            "rate limiting. Set the integration to debug and look for the "
+            "close code/reason above.",
+            server_id,
+            self._last_close.get(server_id, {}).get("code"),
+        )
 
     def _handle_auth_failure(self, server_id: ServerId) -> None:
         """Escalate repeated fast closes to an authentication failure.
@@ -1022,7 +1085,14 @@ class XiaoYiWebSocketManager:
                     )
 
         else:
-            _LOGGER.debug("[%s] Unknown message format, ignoring", source_server)
+            # 小艺 often sends one last frame explaining why it is about to
+            # close; keeping this at debug made that frame invisible.
+            self._throttle.warning(
+                f"{source_server}/unknown_frame",
+                "[%s] Ignoring an unrecognised frame: %s",
+                source_server,
+                json.dumps(message, ensure_ascii=False)[:300],
+            )
 
     async def _dispatch_request(
         self, parsed: Any, source_server: ServerId
