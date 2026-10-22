@@ -181,6 +181,7 @@ class XiaoYiWSConfig:
     heartbeat_interval: float = 20.0
     heartbeat_first_delay: float = 1.0
     single_server: bool = False
+    skip_init: bool = False
 
 
 class XiaoYiWebSocketManager:
@@ -265,6 +266,12 @@ class XiaoYiWebSocketManager:
 
         # Servers this manager is allowed to keep connected (see single_server).
         self._active_servers: set[ServerId] = {"server1", "server2"}
+
+        # Exact connect time per server; kept until the socket is torn down so
+        # the close log can measure the real lifetime.
+        self._connected_at: dict[ServerId, float] = {}
+        # When clawd_bot_init went out, to correlate it with an early close.
+        self._init_sent_at: dict[ServerId, float] = {}
 
         # Last close code/reason per server (surfaced in diagnostics).
         self._last_close: dict[ServerId, dict[str, Any]] = {}
@@ -469,6 +476,8 @@ class XiaoYiWebSocketManager:
         self._no_reconnect.clear()
         self._tls_degraded.clear()
         self._last_close.clear()
+        self._connected_at.clear()
+        self._init_sent_at.clear()
         self._active_servers = {"server1", "server2"}
         self._throttle.reset()
         _LOGGER.info("Disconnected from all servers")
@@ -700,16 +709,17 @@ class XiaoYiWebSocketManager:
             # Store connection. The reconnect and fast-close counters are
             # preserved across (re)connects: resetting them here would make
             # the backoff and the auth-failure escalation never trigger.
+            self._connected_at[server_id] = time.monotonic()
             if server_id == "server1":
                 self._ws1 = ws
                 self._state1.connected = True
                 self._state1.ready = True
-                self._state1.connected_at = time.monotonic()
+                self._state1.connected_at = self._connected_at[server_id]
             else:
                 self._ws2 = ws
                 self._state2.connected = True
                 self._state2.ready = True
-                self._state2.connected_at = time.monotonic()
+                self._state2.connected_at = self._connected_at[server_id]
 
             # A fresh connection clears any prior auth pause for this server.
             self._auth_pause_until.pop(server_id, None)
@@ -726,11 +736,20 @@ class XiaoYiWebSocketManager:
             )
 
             # Send init message
-            await ws.send(json.dumps({
-                "msgType": A2A_MSG_TYPE_INIT,
-                "agentId": self.config.agent_id,
-            }))
-            _LOGGER.info("[%s] Sent clawd_bot_init message", server_id)
+            if self.config.skip_init:
+                self._throttle.warning(
+                    f"{server_id}/init_skipped",
+                    "[%s] Diagnostic mode: clawd_bot_init is NOT sent "
+                    "(skip_init option is on)",
+                    server_id,
+                )
+            else:
+                await ws.send(json.dumps({
+                    "msgType": A2A_MSG_TYPE_INIT,
+                    "agentId": self.config.agent_id,
+                }))
+                self._init_sent_at[server_id] = time.monotonic()
+                _LOGGER.info("[%s] Sent clawd_bot_init message", server_id)
 
             # Start heartbeat. The first beat fires after
             # HEARTBEAT_FIRST_DELAY so the server sees application traffic
@@ -849,6 +868,8 @@ class XiaoYiWebSocketManager:
                 self._state1.connected = False
                 self._state1.ready = False
                 self._state1.connected_at = 0.0
+                self._connected_at.pop("server1", None)
+                self._init_sent_at.pop("server1", None)
                 self._heartbeat1 = None
                 self._receive_task1 = None
                 self._stable_timer1 = None
@@ -857,6 +878,8 @@ class XiaoYiWebSocketManager:
                 self._state2.connected = False
                 self._state2.ready = False
                 self._state2.connected_at = 0.0
+                self._connected_at.pop("server2", None)
+                self._init_sent_at.pop("server2", None)
                 self._heartbeat2 = None
                 self._receive_task2 = None
                 self._stable_timer2 = None
@@ -948,7 +971,8 @@ class XiaoYiWebSocketManager:
             # is not measured from this connection.
             state.connected_at = 0.0
             return
-        lifetime = time.monotonic() - state.connected_at
+        recorded = self._last_close.get(server_id, {}).get("lifetime")
+        lifetime = recorded if recorded is not None else time.monotonic() - state.connected_at
         state.connected_at = 0.0
 
         if lifetime < WS_FAST_CLOSE_WINDOW:
@@ -980,23 +1004,26 @@ class XiaoYiWebSocketManager:
         close = getattr(err, "rcvd", None)
         code = getattr(close, "code", None)
         reason = getattr(close, "reason", "") or ""
-        state = self._state1 if server_id == "server1" else self._state2
-        lifetime = (
-            time.monotonic() - state.connected_at if state.connected_at else 0.0
-        )
+        now = time.monotonic()
+        started = self._connected_at.get(server_id)
+        lifetime = now - started if started else 0.0
+        init_at = self._init_sent_at.get(server_id)
+        init_offset = f"{init_at - started:.3f}s" if (init_at and started) else "—"
         self._last_close[server_id] = {
             "code": code,
             "reason": reason,
-            "lifetime": round(lifetime, 2),
+            "lifetime": round(lifetime, 3),
+            "init_offset": init_offset,
         }
         self._throttle.warning(
             f"{server_id}/closed",
-            "[%s] WebSocket closed by the server after %.1fs "
-            "(code=%s, reason=%s)",
+            "[%s] WebSocket closed by the server after %.3fs "
+            "(code=%s, reason=%s, clawd_bot_init sent at +%s)",
             server_id,
             lifetime,
             code,
             reason or "-",
+            init_offset,
         )
 
     def _handle_fast_close(self, server_id: ServerId) -> None:

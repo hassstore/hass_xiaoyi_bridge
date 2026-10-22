@@ -39,6 +39,7 @@ from .const import (
     CONF_RECONNECT_MAX,
     CONF_SINGLE_SERVER,
     CONF_SK,
+    CONF_SKIP_INIT,
     CONF_STATUS_UPDATES,
     CONF_WS_URL1,
     CONF_WS_URL2,
@@ -49,6 +50,7 @@ from .const import (
     DEFAULT_LANGUAGE,
     DEFAULT_RECONNECT_MAX,
     DEFAULT_SINGLE_SERVER,
+    DEFAULT_SKIP_INIT,
     DEFAULT_STATUS_UPDATES,
     DEFAULT_WS_URL_1,
     DEFAULT_WS_URL_2,
@@ -156,6 +158,7 @@ def _options_schema(hass: HomeAssistant, current_agent: str) -> vol.Schema:
                 )
             ),
             vol.Optional(CONF_SINGLE_SERVER, default=DEFAULT_SINGLE_SERVER): bool,
+            vol.Optional(CONF_SKIP_INIT, default=DEFAULT_SKIP_INIT): bool,
         }
     )
 
@@ -456,6 +459,9 @@ class XiaoYiBridgeOptionsFlow(OptionsFlowWithReload):
                     ),
                     CONF_SINGLE_SERVER: options.get(
                         CONF_SINGLE_SERVER, DEFAULT_SINGLE_SERVER
+                    ),
+                    CONF_SKIP_INIT: options.get(
+                        CONF_SKIP_INIT, DEFAULT_SKIP_INIT
                     ),
                 },
             ),

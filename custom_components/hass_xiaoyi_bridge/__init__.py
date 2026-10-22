@@ -58,6 +58,7 @@ from .const import (
     CONF_RECONNECT_MAX,
     CONF_SINGLE_SERVER,
     CONF_SK,
+    CONF_SKIP_INIT,
     CONF_STATUS_UPDATES,
     CONF_WS_URL1,
     CONF_WS_URL2,
@@ -69,6 +70,7 @@ from .const import (
     DEFAULT_LANGUAGE,
     DEFAULT_RECONNECT_MAX,
     DEFAULT_SINGLE_SERVER,
+    DEFAULT_SKIP_INIT,
     DEFAULT_STATUS_UPDATES,
     DEFAULT_WS_URL_1,
     DEFAULT_WS_URL_2,
@@ -290,6 +292,9 @@ async def async_setup_entry(
         CONF_SINGLE_SERVER,
         data.get(CONF_SINGLE_SERVER, DEFAULT_SINGLE_SERVER),
     )
+    skip_init = options.get(
+        CONF_SKIP_INIT, data.get(CONF_SKIP_INIT, DEFAULT_SKIP_INIT)
+    )
 
     session_mgr = SessionManager()
     throttle = ThrottledLogger(_LOGGER, LOG_THROTTLE_COOLDOWN)
@@ -339,6 +344,7 @@ async def async_setup_entry(
         heartbeat_interval=heartbeat_interval,
         heartbeat_first_delay=heartbeat_first_delay,
         single_server=single_server,
+        skip_init=skip_init,
     )
 
     # Create WebSocket manager

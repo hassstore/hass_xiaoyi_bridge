@@ -1016,3 +1016,38 @@ async def test_heartbeat_timeout_records_the_close_code(
 
     assert manager._last_close["server1"]["code"] == 1000
     await manager.disconnect()
+
+
+async def test_skip_init_sends_no_handshake_frame(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The diagnostic switch suppresses clawd_bot_init."""
+    connection = FakeConnection("open")
+    patch_connect(monkeypatch, [connection, FakeConnection("open")])
+    manager = make_manager(skip_init=True)
+    await manager.connect()
+
+    assert connection.sent == []
+    await manager.disconnect()
+
+
+async def test_close_log_reports_the_real_lifetime_and_init_offset(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The close line must show how long the socket lived and when init went out."""
+    patch_connect(monkeypatch, [FakeConnection("close"), FakeConnection("open")])
+    manager = make_manager()
+
+    with caplog.at_level(logging.WARNING):
+        await manager.connect()
+        for _ in range(30):
+            await asyncio.sleep(0.02)
+            if "server1" in manager._last_close:
+                break
+
+    info = manager._last_close["server1"]
+    assert info["code"] == 1000
+    assert info["lifetime"] >= 0
+    assert info["init_offset"] != "—"
+    assert "clawd_bot_init sent at +" in caplog.text
+    await manager.disconnect()

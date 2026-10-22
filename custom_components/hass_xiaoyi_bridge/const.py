@@ -17,6 +17,7 @@ CONF_RECONNECT_MAX = "reconnect_max"
 CONF_HEARTBEAT_INTERVAL = "heartbeat_interval"
 CONF_HEARTBEAT_FIRST_DELAY = "heartbeat_first_delay"
 CONF_SINGLE_SERVER = "single_server"
+CONF_SKIP_INIT = "skip_init"
 CONF_API_ID = "api_id"
 
 # ─── Defaults ───────────────────────────────────────────────────────────────
@@ -37,6 +38,8 @@ DEFAULT_HEARTBEAT_FIRST_DELAY = 1
 # 只连接主端点（server1），失败才回退到备用端点。
 # 用于确认平台是否限制“同一智能体只能有一个会话”。
 DEFAULT_SINGLE_SERVER = False
+# 诊断用：连接后不发送 clawd_bot_init，用来判断“连上即断”是否由该帧触发。
+DEFAULT_SKIP_INIT = False
 DEFAULT_API_ID = ""
 
 # async_converse() 接受的 HA 语言码（BCP 47）。选项值必须是小写翻译键，
