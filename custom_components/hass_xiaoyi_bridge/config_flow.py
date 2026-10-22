@@ -6,7 +6,7 @@ import logging
 from typing import Any
 
 import voluptuous as vol
-from homeassistant.components.conversation import async_get_agent
+from homeassistant.components.conversation import async_get_agent, get_agent_manager
 from homeassistant.config_entries import (
     ConfigEntry,
     ConfigFlow,
@@ -15,10 +15,11 @@ from homeassistant.config_entries import (
     OptionsFlowWithReload,
 )
 from homeassistant.const import UnitOfTime
-from homeassistant.core import callback
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -68,39 +69,95 @@ DATA_SCHEMA = vol.Schema(
     }
 )
 
-# Fields that live in ConfigEntry.options: user preferences.
-OPTIONS_SCHEMA = vol.Schema(
-    {
-        vol.Optional(CONF_LANGUAGE, default=DEFAULT_LANGUAGE): SelectSelector(
-            SelectSelectorConfig(
-                options=LANGUAGE_OPTIONS,
-                mode=SelectSelectorMode.DROPDOWN,
-                translation_key="language",
+def _agent_select_options(hass: HomeAssistant) -> list[SelectOptionDict]:
+    """List the conversation agents that can be picked in the options form.
+
+    Args:
+        hass: Home Assistant instance.
+
+    Returns:
+        Selector options: the empty value (default agent) followed by every
+        conversation agent that is currently loaded.
+    """
+    options = [
+        SelectOptionDict(value="", label="默认对话代理（Home Assistant）"),
+    ]
+    try:
+        agents = get_agent_manager(hass).async_get_agent_info()
+    except Exception:  # noqa: BLE001 - conversation may not be set up yet
+        _LOGGER.debug("Cannot list conversation agents", exc_info=True)
+        return options
+
+    for agent in agents:
+        options.append(
+            SelectOptionDict(value=agent.id, label=f"{agent.name}  ({agent.id})")
+        )
+    return options
+
+
+def _options_schema(hass: HomeAssistant, current_agent: str) -> vol.Schema:
+    """Build the options schema with the live list of conversation agents.
+
+    The agent list is read on every render, so an agent added or removed after
+    the integration was configured shows up without a restart.
+
+    Args:
+        hass: Home Assistant instance.
+        current_agent: Currently configured agent id (kept selectable even if
+            it is not loaded right now, so the form never silently drops it).
+
+    Returns:
+        The options schema.
+    """
+    agent_options = _agent_select_options(hass)
+    if current_agent and all(option["value"] != current_agent for option in agent_options):
+        agent_options.append(
+            SelectOptionDict(
+                value=current_agent, label=f"{current_agent}（当前值）"
             )
-        ),
-        vol.Optional(CONF_HA_AGENT_ID, default=DEFAULT_HA_AGENT_ID): str,
-        vol.Optional(CONF_API_ID, default=DEFAULT_API_ID): str,
-        vol.Optional(CONF_STATUS_UPDATES, default=DEFAULT_STATUS_UPDATES): bool,
-        vol.Optional(
-            CONF_HEARTBEAT_INTERVAL, default=DEFAULT_HEARTBEAT_INTERVAL
-        ): NumberSelector(
-            NumberSelectorConfig(
-                min=10, max=120, step=1, unit_of_measurement=UnitOfTime.SECONDS
-            )
-        ),
-        vol.Optional(
-            CONF_RECONNECT_MAX, default=DEFAULT_RECONNECT_MAX
-        ): NumberSelector(NumberSelectorConfig(min=1, max=100, step=1)),
-        vol.Optional(
-            CONF_HEARTBEAT_FIRST_DELAY, default=DEFAULT_HEARTBEAT_FIRST_DELAY
-        ): NumberSelector(
-            NumberSelectorConfig(
-                min=0, max=60, step=1, unit_of_measurement=UnitOfTime.SECONDS
-            )
-        ),
-        vol.Optional(CONF_SINGLE_SERVER, default=DEFAULT_SINGLE_SERVER): bool,
-    }
-)
+        )
+
+    return vol.Schema(
+        {
+            vol.Optional(CONF_LANGUAGE, default=DEFAULT_LANGUAGE): SelectSelector(
+                SelectSelectorConfig(
+                    options=LANGUAGE_OPTIONS,
+                    mode=SelectSelectorMode.DROPDOWN,
+                    translation_key="language",
+                )
+            ),
+            vol.Optional(
+                CONF_HA_AGENT_ID, default=DEFAULT_HA_AGENT_ID
+            ): SelectSelector(
+                SelectSelectorConfig(
+                    options=agent_options,
+                    mode=SelectSelectorMode.DROPDOWN,
+                    # 允许手填：某些代理没有 config entry，或列表尚未加载。
+                    custom_value=True,
+                )
+            ),
+            vol.Optional(CONF_API_ID, default=DEFAULT_API_ID): str,
+            vol.Optional(CONF_STATUS_UPDATES, default=DEFAULT_STATUS_UPDATES): bool,
+            vol.Optional(
+                CONF_HEARTBEAT_INTERVAL, default=DEFAULT_HEARTBEAT_INTERVAL
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=10, max=120, step=1, unit_of_measurement=UnitOfTime.SECONDS
+                )
+            ),
+            vol.Optional(
+                CONF_RECONNECT_MAX, default=DEFAULT_RECONNECT_MAX
+            ): NumberSelector(NumberSelectorConfig(min=1, max=100, step=1)),
+            vol.Optional(
+                CONF_HEARTBEAT_FIRST_DELAY, default=DEFAULT_HEARTBEAT_FIRST_DELAY
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=0, max=60, step=1, unit_of_measurement=UnitOfTime.SECONDS
+                )
+            ),
+            vol.Optional(CONF_SINGLE_SERVER, default=DEFAULT_SINGLE_SERVER): bool,
+        }
+    )
 
 
 def _is_valid_ws_url(url: str) -> bool:
@@ -372,10 +429,13 @@ class XiaoYiBridgeOptionsFlow(OptionsFlowWithReload):
                 return self.async_create_entry(title="", data=user_input)
 
         options = self.config_entry.options
+        schema = _options_schema(
+            self.hass, options.get(CONF_HA_AGENT_ID, DEFAULT_HA_AGENT_ID)
+        )
         return self.async_show_form(
             step_id="init",
             data_schema=self.add_suggested_values_to_schema(
-                OPTIONS_SCHEMA,
+                schema,
                 {
                     CONF_LANGUAGE: options.get(CONF_LANGUAGE, DEFAULT_LANGUAGE),
                     CONF_HA_AGENT_ID: options.get(

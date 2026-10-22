@@ -459,3 +459,68 @@ async def test_options_agent_check_tolerates_failures(hass, monkeypatch) -> None
     )
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options[CONF_HA_AGENT_ID] == "conversation.whatever"
+
+
+# ─── 对话代理下拉选择 ───────────────────────────────────────────────────────
+
+
+async def test_options_flow_lists_conversation_agents(
+    hass, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The agent field is a dropdown filled from the loaded agents."""
+    from types import SimpleNamespace
+
+    from custom_components.hass_xiaoyi_bridge import config_flow
+
+    class FakeManager:
+        def async_get_agent_info(self):
+            return [
+                SimpleNamespace(id="conversation.openai", name="OpenAI"),
+                SimpleNamespace(id="conversation.google", name="Google"),
+            ]
+
+    monkeypatch.setattr(
+        config_flow, "get_agent_manager", lambda hass: FakeManager()
+    )
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert result["type"] is FlowResultType.FORM
+
+    # The default option plus every loaded agent must be offered.
+    options = config_flow._agent_select_options(hass)
+    values = [option["value"] for option in options]
+    assert values[0] == ""
+    assert "conversation.openai" in values
+    assert "conversation.google" in values
+    labels = {option["value"]: option["label"] for option in options}
+    assert "OpenAI" in labels["conversation.openai"]
+
+
+async def test_options_schema_keeps_an_unloaded_current_agent(
+    hass, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A currently configured agent stays selectable even if not loaded."""
+    from types import SimpleNamespace
+
+    from homeassistant.helpers.selector import SelectSelector
+
+    from custom_components.hass_xiaoyi_bridge import config_flow
+
+    class FakeManager:
+        def async_get_agent_info(self):
+            return [SimpleNamespace(id="conversation.openai", name="OpenAI")]
+
+    monkeypatch.setattr(config_flow, "get_agent_manager", lambda hass: FakeManager())
+    schema = config_flow._options_schema(hass, "conversation.gone")
+
+    marker, selector = next(
+        (key, value)
+        for key, value in schema.schema.items()
+        if getattr(key, "schema", key) == "ha_agent_id"
+    )
+    assert isinstance(selector, SelectSelector)
+    values = [option["value"] for option in selector.config["options"]]
+    # The missing current value is injected so the form never drops it.
+    assert values == ["", "conversation.openai", "conversation.gone"]

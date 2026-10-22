@@ -90,8 +90,8 @@
 | 选项 | 默认值 | 说明 |
 | --- | --- | --- |
 | 处理语言 `language` | 跟随 Home Assistant | 传给 Assist 管线的语言；`auto` 跟随 `hass.config.language`，也可固定为 zh-Hans / zh-Hant / en / ja / ko / de / fr |
-| HA 对话代理 ID `ha_agent_id` | 空 | 指定对话代理，例如 `conversation.openai_conversation`；留空使用默认 Assist 代理 |
-| 推送 API ID `api_id` | 空 | 小艺开放平台上的 API ID，`hass_xiaoyi_bridge.send_push` 服务需要它 |
+| 对话代理 `ha_agent_id` | 空 | **下拉选择**当前已加载的对话代理（列表来自 `conversation` 组件，实时刷新）；留空使用默认 Assist 代理，也可手动输入未列出的 ID |
+| 推送 API ID `api_id` | 空 | 小艺开放平台智能体页面上用于 **agent-webhook 主动推送** 的 API ID；只有 `hass_xiaoyi_bridge.send_push` 服务需要它，不用主动推送可留空 |
 | 发送处理状态更新 `status_updates` | 开 | 处理过程中向小艺回发“正在处理 / 处理完成”等状态 |
 | 心跳间隔 `heartbeat_interval` | 20 秒 | 应用层心跳周期，可设 10–120 秒；小艺服务端会关闭没有应用层流量的长连接，建议不超过 30 秒 |
 | 最大重连次数 `reconnect_max` | 50 | 达到该次数后暂停 15 分钟再继续重试（不会永久放弃） |

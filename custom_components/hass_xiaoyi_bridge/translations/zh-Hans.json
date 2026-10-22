@@ -55,8 +55,8 @@
         "description": "调整语音指令的处理方式。保存后桥接会重载一次并重新连接。",
         "data": {
           "language": "处理语言",
-          "ha_agent_id": "HA 对话代理 ID（留空使用默认）",
-          "api_id": "推送 API ID（用于主动推送）",
+          "ha_agent_id": "对话代理（从已加载的代理中选择）",
+          "api_id": "推送 API ID（仅 send_push 需要）",
           "status_updates": "发送处理状态更新",
           "heartbeat_interval": "心跳间隔（秒）",
           "reconnect_max": "最大重连次数",
@@ -65,8 +65,8 @@
         },
         "data_description": {
           "language": "传给 Assist 管道的语言；除非小艺使用的语言与 HA 界面不同，否则保持“跟随 Home Assistant”",
-          "ha_agent_id": "可选，指定对话代理 ID，例如 conversation.openai_conversation",
-          "api_id": "小艺开放平台上的 API ID，send_push 服务需要它",
+          "ha_agent_id": "处理小艺指令的对话代理。下拉列表来自当前已加载的代理；留空表示使用默认 Assist 代理，也可以直接输入列表里没有的 ID。",
+          "api_id": "小艺开放平台智能体页面上用于 agent-webhook 主动推送的 API ID。不使用 send_push 服务时可以留空。",
           "status_updates": "向小艺回发“正在处理”“处理完成”等状态",
           "heartbeat_interval": "应用心跳周期；小艺服务端会关闭没有流量的长连接，建议不超过 30 秒",
           "reconnect_max": "达到该次数后暂停 15 分钟再继续重试",
