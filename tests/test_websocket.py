@@ -897,3 +897,66 @@ async def test_deliberate_disconnect_does_not_schedule_a_reconnect(
 
     assert manager._reconnect_task1 is None
     await manager.disconnect()
+
+
+# ─── Regression tests for the handshake-rejection diagnostics ───────────────
+
+
+def test_describe_rejection_extracts_code_and_description() -> None:
+    """The gateway's JSON body is surfaced verbatim (only clue for a 401)."""
+
+    class FakeResponse:
+        body = bytearray(
+            b'{"code":"badRequest","desc":"Resource is not found or param error"}'
+        )
+
+    assert ws_module._describe_rejection(FakeResponse()) == (
+        "badRequest: Resource is not found or param error"
+    )
+
+
+def test_describe_rejection_handles_non_json_and_missing_bodies() -> None:
+    """Non-JSON bodies are truncated, absent bodies yield an empty string."""
+
+    class PlainText:
+        body = b"<html><body>403 Forbidden</body></html>"
+
+    class NoBody:
+        body = None
+
+    assert ws_module._describe_rejection(PlainText()) == "<html><body>403 Forbidden</body></html>"
+    assert ws_module._describe_rejection(NoBody()) == ""
+
+
+def test_auth_error_carries_status_and_server_detail() -> None:
+    """The exception keeps what the server said so callers can log it."""
+    err = ws_module.XiaoYiAuthError(
+        "server1 rejected", status=401, detail="badRequest: x", server_id="server1"
+    )
+    assert err.status == 401
+    assert err.detail == "badRequest: x"
+    assert err.server_id == "server1"
+
+
+async def test_connect_surfaces_the_gateway_rejection(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused upgrade reports the HTTP status *and* the server's message."""
+    from websockets.datastructures import Headers
+    from websockets.http11 import Response
+
+    body = b'{"code":"badRequest","desc":"Resource is not found or param error"}'
+
+    async def fake_connect(url: str, **kwargs: Any) -> Any:
+        raise InvalidStatus(Response(401, "Unauthorized", Headers(), body))
+
+    monkeypatch.setattr(ws_module.websockets, "connect", fake_connect)
+    manager = make_manager()
+
+    with pytest.raises(XiaoYiAuthError) as err:
+        await manager.connect()
+
+    assert err.value.status == 401
+    assert "badRequest" in (err.value.detail or "")
+    assert "Resource is not found" in str(err.value)
+    await manager.disconnect()

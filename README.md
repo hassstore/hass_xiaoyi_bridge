@@ -268,6 +268,35 @@ POST https://hag.cloud.huawei.com/open-ability-agent/v1/agent-webhook
 
 多为智能体未上架、测试白名单未包含你的账号，或 AK/SK 错误、创建凭证时选错了平台类型。请到小艺开放平台确认智能体已发布、白名单已配置，然后重新创建凭证（旧凭证会立即失效），并在集成上执行重新认证。
 
+### 配置时报「小艺服务器拒绝了这组凭证」
+
+小艺网关对**所有**被拒绝的握手都返回同一个响应：
+
+```text
+HTTP 401  {"code":"badRequest","desc":"Resource is not found or param error"}
+```
+
+也就是说 **401 不等于「AK/SK 一定错」**，要按开放平台的创建顺序逐项核对：
+
+1. **创建凭证时「服务平台」必须选「Web端（JS API）」**——选成 Android / iOS 等平台会一直 401，这是最常见的原因；
+2. Agent ID、AK、SK 与开放平台逐字一致，复制时没有多余空格或换行；
+3. 智能体已上架（「发布真机测试」），且当前账号在该智能体的测试白名单内；
+4. Home Assistant 主机时间准确（签名里带毫秒时间戳，偏差建议小于 5 分钟）。
+
+改完后在集成卡片上执行「重新认证 / 重新配置」，或删除条目重新添加。
+
+需要看服务器原始返回时，在任意能出网的机器上运行诊断脚本（只需 `websockets`）：
+
+```bash
+python tools/xiaoyi_probe.py --ak <AK> --sk <SK> --agent-id <AGENT_ID>
+```
+
+脚本会打印两个端点的 HTTP 状态、`Server` 头、返回体与耗时，并附带一次「不带凭证」的对照请求；如果两者的返回完全相同，说明拒绝发生在鉴权网关，重点检查上面 1–3 项。集成日志里也会给出同样信息，例如：
+
+```text
+XiaoYi refused the handshake: server1 rejected the handshake (HTTP 401: badRequest: Resource is not found or param error)
+```
+
 ### 小艺没有响应
 
 1. 查看设备页面 `<设备名> 连接状态` 二进制传感器是否为“开”（至少一条 A2A 连接就绪）
@@ -307,6 +336,7 @@ MIT，见 [LICENSE](LICENSE)。
 pip install -r requirements_test.txt
 ruff check custom_components tests tools   # lint（最严格子集见 CI）
 python tools/check_translations.py          # JSON + 翻译键/占位符一致性
+python tools/xiaoyi_probe.py --ak … --sk … --agent-id …   # 握手诊断（需真实凭证）
 pytest -q                                   # 130 个测试
 ```
 

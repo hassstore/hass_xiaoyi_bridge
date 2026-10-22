@@ -47,6 +47,7 @@ from .const import (
     ATTR_MESSAGE,
     ATTR_PUSH_TEXT,
     ATTR_SESSION_ID,
+    AUTH_FAILURE_HINT,
     CONF_AGENT_ID,
     CONF_AK,
     CONF_API_ID,
@@ -349,7 +350,7 @@ async def async_setup_entry(
     except XiaoYiAuthError as err:
         await ws_mgr.disconnect()
         entry.runtime_data = None
-        raise ConfigEntryAuthFailed(str(err)) from err
+        raise ConfigEntryAuthFailed(f"{err} — {AUTH_FAILURE_HINT}") from err
     except Exception as err:
         await ws_mgr.disconnect()
         entry.runtime_data = None

@@ -97,6 +97,17 @@ SHUTDOWN_TASK_GRACE = 2  # seconds
 # 同类告警的静默窗口：首条立即记录，窗口内重复只累计，窗口末输出汇总。
 LOG_THROTTLE_COOLDOWN = 300  # seconds
 
+# ─── 握手被拒时的排障提示 ──────────────────────────────────────────────────
+# 小艺网关对所有被拒绝的握手都返回同一个 401
+# （{"code":"badRequest","desc":"Resource is not found or param error"}），
+# 因此“401”不等于“AK/SK 一定错”。按开放平台的创建顺序逐项核对最有效。
+AUTH_FAILURE_HINT = (
+    "请逐项确认：① Agent ID / AK / SK 与开放平台一致且没有多余空格；"
+    "② 智能体已上架（发布真机测试）且当前账号在测试白名单内；"
+    "③ 创建凭证时「服务平台」必须选“Web端（JS API）”——选错平台会一直 401。"
+    "网关对所有拒绝都返回同样内容，需要时可运行 tools/xiaoyi_probe.py 查看原始返回。"
+)
+
 # ─── Push service (小艺主动推送) ───────────────────────────────────────────
 DEFAULT_PUSH_URL = "https://hag.cloud.huawei.com/open-ability-agent/v1/agent-webhook"
 PUSH_TIMEOUT = 10  # seconds

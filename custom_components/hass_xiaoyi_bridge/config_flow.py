@@ -27,6 +27,7 @@ from homeassistant.helpers.selector import (
 from .a2a.session import SessionManager
 from .a2a.websocket import XiaoYiAuthError, XiaoYiWebSocketManager, XiaoYiWSConfig
 from .const import (
+    AUTH_FAILURE_HINT,
     CONF_AGENT_ID,
     CONF_AK,
     CONF_API_ID,
@@ -179,7 +180,9 @@ class XiaoYiBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
 
                 try:
                     await _async_test_connection(ws_url1, ws_url2, ak, sk, agent_id)
-                except XiaoYiAuthError:
+                except XiaoYiAuthError as err:
+                    _LOGGER.warning("XiaoYi refused the handshake: %s", err)
+                    _LOGGER.warning("%s", AUTH_FAILURE_HINT)
                     errors["base"] = "invalid_auth"
                 except Exception:
                     _LOGGER.exception("Connection test failed")
@@ -239,7 +242,9 @@ class XiaoYiBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
                         sk,
                         entry.data[CONF_AGENT_ID],
                     )
-                except XiaoYiAuthError:
+                except XiaoYiAuthError as err:
+                    _LOGGER.warning("XiaoYi refused the handshake: %s", err)
+                    _LOGGER.warning("%s", AUTH_FAILURE_HINT)
                     errors["base"] = "invalid_auth"
                 except Exception:
                     _LOGGER.exception("Reauth connection test failed")
@@ -289,7 +294,9 @@ class XiaoYiBridgeConfigFlow(ConfigFlow, domain=DOMAIN):
                         entry.data[CONF_SK],
                         entry.data[CONF_AGENT_ID],
                     )
-                except XiaoYiAuthError:
+                except XiaoYiAuthError as err:
+                    _LOGGER.warning("XiaoYi refused the handshake: %s", err)
+                    _LOGGER.warning("%s", AUTH_FAILURE_HINT)
                     errors["base"] = "invalid_auth"
                 except Exception:
                     _LOGGER.exception("Reconfigure connection test failed")

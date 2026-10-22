@@ -81,6 +81,40 @@ _LOGGER = logging.getLogger(__name__)
 
 __all__ = ["XiaoYiAuthError", "XiaoYiWSConfig", "XiaoYiWebSocketManager"]
 
+
+def _describe_rejection(response: Any) -> str:
+    """Summarise the body of a refused WebSocket upgrade.
+
+    The 小艺 gateway returns JSON such as
+    ``{"code":"badRequest","desc":"Resource is not found or param error"}``.
+    Returning that text verbatim is the only way a user can tell a rejected
+    credential from an unpublished agent, because the status code is the same
+    for every rejection.
+
+    Args:
+        response: The ``Response`` attached to ``websockets.InvalidStatus``.
+
+    Returns:
+        A short ``code: description`` string, or an empty string.
+    """
+    body = getattr(response, "body", None)
+    if not isinstance(body, (bytes, bytearray)):
+        return ""
+
+    text = bytes(body).decode("utf-8", "replace").strip()
+    try:
+        parsed = json.loads(text)
+    except ValueError:
+        return text[:200]
+    if not isinstance(parsed, dict):
+        return text[:200]
+
+    code = parsed.get("code") or parsed.get("error") or ""
+    desc = parsed.get("desc") or parsed.get("message") or ""
+    if code and desc:
+        return f"{code}: {desc}"
+    return str(code or desc)[:200]
+
 # Type aliases
 ServerId = str  # "server1" | "server2"
 MessageCallback = Callable[[Any], Awaitable[None]]
@@ -90,7 +124,34 @@ StateCallback = Callable[[], None]  # sync listener for state changes
 
 
 class XiaoYiAuthError(Exception):
-    """Raised when the XiaoYi server rejects the AK/SK credentials."""
+    """Raised when the XiaoYi server rejects the handshake.
+
+    The gateway answers **every** rejected upgrade with HTTP 401 and the same
+    body (``{"code":"badRequest","desc":"Resource is not found or param
+    error"}``), whether the AK/SK pair is wrong, the agent is not published or
+    the credential was created for the wrong platform. The status and the raw
+    server description are therefore carried along so the logs (and the config
+    flow) can show what the server actually said.
+
+    Attributes:
+        status: HTTP status code of the refused upgrade, if any.
+        detail: Server-provided code/description, if any.
+        server_id: "server1" / "server2" that refused the connection.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status: int | None = None,
+        detail: str | None = None,
+        server_id: str | None = None,
+    ) -> None:
+        """Initialize the error and keep the server response for diagnostics."""
+        super().__init__(message)
+        self.status = status
+        self.detail = detail
+        self.server_id = server_id
 
 
 @dataclass
@@ -577,12 +638,18 @@ class XiaoYiWebSocketManager:
                 self._tls_degraded.add(server_id)
             except InvalidStatus as err:
                 status = getattr(err.response, "status_code", None)
+                detail = _describe_rejection(getattr(err, "response", None))
+                suffix = f": {detail}" if detail else ""
                 if status in (401, 403):
                     raise XiaoYiAuthError(
-                        f"{server_id} rejected the credentials (HTTP {status})"
+                        f"{server_id} rejected the handshake "
+                        f"(HTTP {status}{suffix})",
+                        status=status,
+                        detail=detail,
+                        server_id=server_id,
                     ) from err
                 raise ConnectionError(
-                    f"{server_id} rejected the connection (HTTP {status})"
+                    f"{server_id} rejected the connection (HTTP {status}{suffix})"
                 ) from err
 
             # Store connection. The reconnect and fast-close counters are
