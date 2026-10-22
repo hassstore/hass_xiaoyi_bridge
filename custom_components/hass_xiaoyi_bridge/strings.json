@@ -161,6 +161,9 @@
     },
     "no_loaded_entry": {
       "message": "No XiaoYi Bridge config entry is loaded."
+    },
+    "push_id_not_sent": {
+      "message": "The 小艺 platform did not include a push ID in the last incoming message (parts: {kinds}), so a proactive push cannot be addressed. 小艺 has to send data.variables.systemVariables.push_id at least once; otherwise set a fixed push ID in the integration options or pass push_id to this service."
     }
   }
 }

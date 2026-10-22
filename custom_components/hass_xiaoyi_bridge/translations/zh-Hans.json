@@ -161,6 +161,9 @@
     },
     "no_loaded_entry": {
       "message": "没有已加载的小艺桥接配置条目。"
+    },
+    "push_id_not_sent": {
+      "message": "小艺最近一条消息没有携带推送 ID（parts：{kinds}），无法定向推送。需要平台至少下发一次 data.variables.systemVariables.push_id；也可以在集成选项里填写固定 push_id，或调用本服务时传入 push_id。"
     }
   }
 }

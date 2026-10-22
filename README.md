@@ -334,6 +334,14 @@ XiaoYi refused the handshake: server1 rejected the handshake (HTTP 401: badReque
 {"kind": "data", "data": {"variables": {"systemVariables": {"push_id": "..."}}}}
 ```
 
+**先看诊断**：设备页 ⋮ → 下载诊断数据 → `connection.server1.last_frame`：
+
+```json
+{"method": "message/stream", "part_kinds": ["text"], "push_id_found": false}
+```
+
+`part_kinds` 里没有 `data` ⇒ 平台确实没下发（2.0.8 起 `send_push` 会直接这样报错：`小艺最近一条消息没有携带推送 ID（parts：text）`）。
+
 如果已经对话过仍提示缺失，说明这条消息里没有该字段（平台版本差异），有三种处理：
 
 1. 2.0.6 起会做**递归兜底**（兼容 `pushId`、其他嵌套位置），多数情况可直接恢复；

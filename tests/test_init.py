@@ -90,6 +90,7 @@ class FakeManager:
         self.events: list[tuple[str, str]] = []
         self.reconnected = False
         self.is_ready = True
+        self.debug_state: dict[str, Any] | None = None
         self._listeners: list[Any] = []
 
     async def connect(self) -> None:
@@ -121,7 +122,7 @@ class FakeManager:
         return _remove
 
     def get_debug_state(self) -> dict[str, Any]:
-        return {"ready": self.is_ready}
+        return self.debug_state or {"ready": self.is_ready}
 
 
 @pytest.fixture
@@ -1038,3 +1039,26 @@ async def test_received_push_id_is_logged(
 
     assert "carries a push_id" in caplog.text
     assert entry.runtime_data.session_manager.get_push_id("session-1") == "push-xyz"
+
+
+async def test_send_push_explains_a_missing_platform_push_id(
+    hass: HomeAssistant, patch_manager: FakeManager
+) -> None:
+    """When only the push ID is missing, the error names what 小艺 sent."""
+    entry = make_config_entry()
+    entry.add_to_hass(hass)
+    hass.config_entries.async_update_entry(entry, options={"api_id": "api-1"})
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    patch_manager.debug_state = {
+        "server1": {"last_frame": {"part_kinds": ["text"]}},
+    }
+
+    with pytest.raises(ServiceValidationError) as err:
+        await hass.services.async_call(
+            DOMAIN, SERVICE_SEND_PUSH, {ATTR_MESSAGE: "门口有人"}, blocking=True
+        )
+
+    assert err.value.translation_key == "push_id_not_sent"
+    assert err.value.translation_placeholders["kinds"] == "text"

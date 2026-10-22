@@ -148,13 +148,22 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
             api_id=api_id,
             push_id=push_id,
         )
-        if not service.is_configured():
+        missing = service.missing_fields()
+        if missing == ["push_id"]:
+            # We know the API ID but no push ID: tell the user *why*, using the
+            # shape of the last inbound message (that is what diagnostics show).
+            raise ServiceValidationError(
+                translation_domain=DOMAIN,
+                translation_key="push_id_not_sent",
+                translation_placeholders={
+                    "kinds": ", ".join(_last_part_kinds(runtime)) or "unknown",
+                },
+            )
+        if missing:
             raise ServiceValidationError(
                 translation_domain=DOMAIN,
                 translation_key="push_not_configured",
-                translation_placeholders={
-                    "missing": ", ".join(service.missing_fields())
-                },
+                translation_placeholders={"missing": ", ".join(missing)},
             )
 
         message = call.data[ATTR_MESSAGE]
@@ -218,6 +227,27 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         schema=vol.Schema({vol.Optional(ATTR_ENTRY_ID): str}),
     )
     return True
+
+
+def _last_part_kinds(runtime: BridgeRuntimeData) -> list[str]:
+    """Return the part kinds of the most recent inbound message.
+
+    Args:
+        runtime: Runtime data of the config entry.
+
+    Returns:
+        The part kinds (for example ``["text"]``), or an empty list.
+    """
+    try:
+        state = runtime.ws_manager.get_debug_state()
+    except Exception:  # noqa: BLE001 - diagnostics must never break the service
+        return []
+    for server in ("server1", "server2"):
+        frame = (state.get(server) or {}).get("last_frame") or {}
+        kinds = frame.get("part_kinds")
+        if kinds:
+            return [str(kind) for kind in kinds]
+    return []
 
 
 def _async_resolve_entry(
