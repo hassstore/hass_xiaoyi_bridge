@@ -958,3 +958,61 @@ async def test_connect_surfaces_the_gateway_rejection(
     assert "badRequest" in (err.value.detail or "")
     assert "Resource is not found" in str(err.value)
     await manager.disconnect()
+
+
+# ─── Regression tests for the single-server mode and close diagnostics ──────
+
+
+async def test_single_server_connects_only_the_primary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """single_server mode opens one leg and never both."""
+    seen: list[str] = []
+
+    async def fake_connect(url: str, **kwargs: Any) -> FakeConnection:
+        seen.append(url)
+        return FakeConnection("open")
+
+    monkeypatch.setattr(ws_module.websockets, "connect", fake_connect)
+    manager = make_manager(single_server=True)
+    await manager.connect()
+
+    assert seen == ["ws://server1.test"]
+    assert manager._active_servers == {"server1"}
+    assert manager._state2.connected is False
+    await manager.disconnect()
+
+
+async def test_single_server_falls_back_to_the_backup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dead primary falls back to the backup endpoint once."""
+    seen: list[str] = []
+
+    async def fake_connect(url: str, **kwargs: Any) -> FakeConnection:
+        seen.append(url)
+        if "server1" in url:
+            raise ConnectionError("refused")
+        return FakeConnection("open")
+
+    monkeypatch.setattr(ws_module.websockets, "connect", fake_connect)
+    manager = make_manager(single_server=True)
+    await manager.connect()
+
+    assert seen == ["ws://server1.test", "ws://server2.test"]
+    assert manager._active_servers == {"server2"}
+    assert manager._state2.connected is True
+    await manager.disconnect()
+
+
+async def test_heartbeat_timeout_records_the_close_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A close seen by the heartbeat (not the receive loop) is still recorded."""
+    manager = make_manager()
+    manager._state1.connected_at = __import__("time").monotonic()
+
+    await manager._on_heartbeat_timeout("server1", make_closed_error())
+
+    assert manager._last_close["server1"]["code"] == 1000
+    await manager.disconnect()

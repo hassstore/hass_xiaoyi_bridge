@@ -67,7 +67,7 @@ async def test_connection_closed_triggers_timeout(no_first_delay: None) -> None:
     socket = FakeSocket(failures=[make_closed_error()])
     timeouts = []
 
-    async def on_timeout() -> None:
+    async def on_timeout(err=None) -> None:
         timeouts.append(1)
 
     manager = HeartbeatManager(
@@ -86,7 +86,7 @@ async def test_transient_failures_are_tolerated(no_first_delay: None) -> None:
     socket = FakeSocket(failures=[OSError("boom"), OSError("boom")])
     timeouts = []
 
-    async def on_timeout() -> None:
+    async def on_timeout(err=None) -> None:
         timeouts.append(1)
 
     manager = HeartbeatManager(
@@ -188,3 +188,39 @@ def test_default_interval_matches_the_server_idle_window() -> None:
         ws_url1="wss://a", ws_url2="wss://b", ak="ak", sk="sk", agent_id="agent"
     )
     assert config.heartbeat_interval == 20.0
+
+
+async def test_first_delay_is_configurable() -> None:
+    """The first heartbeat honours an explicit delay (diagnostic option)."""
+    socket = FakeSocket()
+    manager = HeartbeatManager(agent_id="agent-1", interval=30, first_delay=0.05)
+
+    await manager.start(socket.send)
+    try:
+        for _ in range(20):
+            if socket.sent:
+                break
+            await asyncio.sleep(0.02)
+        assert socket.sent, "first heartbeat ignored first_delay"
+    finally:
+        await manager.stop()
+
+
+async def test_timeout_callback_receives_the_close_error() -> None:
+    """The callback gets the exception so the close code can be recorded."""
+    error = make_closed_error()
+    socket = FakeSocket(failures=[error])
+    seen: list[BaseException | None] = []
+
+    async def on_timeout(err=None) -> None:
+        seen.append(err)
+
+    manager = HeartbeatManager(agent_id="agent-1", interval=0.02, on_timeout=on_timeout,
+                               first_delay=0)
+    await manager.start(socket.send)
+    await asyncio.sleep(0.1)
+    await manager.stop()
+
+    assert len(seen) == 1
+    assert isinstance(seen[0], ConnectionClosed)
+    assert seen[0].rcvd.code == 1000

@@ -59,7 +59,9 @@
           "api_id": "推送 API ID（用于主动推送）",
           "status_updates": "发送处理状态更新",
           "heartbeat_interval": "心跳间隔（秒）",
-          "reconnect_max": "最大重连次数"
+          "reconnect_max": "最大重连次数",
+          "heartbeat_first_delay": "首次心跳延迟（秒）",
+          "single_server": "只连接主端点"
         },
         "data_description": {
           "language": "传给 Assist 管道的语言；除非小艺使用的语言与 HA 界面不同，否则保持“跟随 Home Assistant”",
@@ -67,7 +69,9 @@
           "api_id": "小艺开放平台上的 API ID，send_push 服务需要它",
           "status_updates": "向小艺回发“正在处理”“处理完成”等状态",
           "heartbeat_interval": "应用心跳周期；小艺服务端会关闭没有流量的长连接，建议不超过 30 秒",
-          "reconnect_max": "达到该次数后暂停 15 分钟再继续重试"
+          "reconnect_max": "达到该次数后暂停 15 分钟再继续重试",
+          "heartbeat_first_delay": "连接建立后多久发第一条心跳（默认 1 秒）。仅在排查“连上即断”时调大。",
+          "single_server": "只连接主端点，主端点不可用时才回退到备用端点。若平台限制同一智能体只能有一个会话（两条连接互相踢），可开启。"
         }
       }
     },

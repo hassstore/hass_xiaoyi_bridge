@@ -53,7 +53,8 @@ class HeartbeatManager:
         self,
         agent_id: str,
         interval: float = 20.0,
-        on_timeout: Callable[[], Awaitable[None]] | None = None,
+        on_timeout: Callable[[BaseException | None], Awaitable[None]] | None = None,
+        first_delay: float | None = None,
         on_success: Callable[[], Awaitable[None]] | None = None,
         throttle: ThrottledLogger | None = None,
         server_id: str = "server",
@@ -63,7 +64,10 @@ class HeartbeatManager:
         Args:
             agent_id: XiaoYi Agent ID for heartbeat messages.
             interval: Heartbeat interval in seconds.
-            on_timeout: Async callback when the connection is declared dead.
+            on_timeout: Async callback when the connection is declared dead;
+                it receives the exception that killed the socket (if any).
+            first_delay: Seconds to wait before the first heartbeat;
+                defaults to ``HEARTBEAT_FIRST_DELAY`` (read at call time).
             on_success: Async callback on successful heartbeat.
             throttle: Rate-limited logger; repeated failures are suppressed.
             server_id: Server identifier used in log messages.
@@ -71,6 +75,8 @@ class HeartbeatManager:
         self.agent_id = agent_id
         self.interval = interval
         self.on_timeout = on_timeout
+        # Read the module constant at call time so tests/config can override it.
+        self.first_delay = HEARTBEAT_FIRST_DELAY if first_delay is None else first_delay
         self.on_success = on_success
         self._throttle = throttle or ThrottledLogger(_LOGGER)
         self._server_id = server_id
@@ -115,7 +121,7 @@ class HeartbeatManager:
     async def _heartbeat_loop(self, ws_send: Callable[[str], Awaitable[None]]) -> None:
         """Main heartbeat loop that sends periodic messages."""
         # First beat soon after connect so the server sees traffic early.
-        await asyncio.sleep(HEARTBEAT_FIRST_DELAY)
+        await asyncio.sleep(self.first_delay)
 
         try:
             while self._running:
@@ -147,7 +153,7 @@ class HeartbeatManager:
                             err,
                         )
                         if self.on_timeout:
-                            await self.on_timeout()
+                            await self.on_timeout(err)
                         return  # Stop heartbeat; reconnect starts a new one
                     _LOGGER.debug(
                         "[%s] Heartbeat send failed (transient %d/%d): %s",

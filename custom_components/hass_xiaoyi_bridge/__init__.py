@@ -52,9 +52,11 @@ from .const import (
     CONF_AK,
     CONF_API_ID,
     CONF_HA_AGENT_ID,
+    CONF_HEARTBEAT_FIRST_DELAY,
     CONF_HEARTBEAT_INTERVAL,
     CONF_LANGUAGE,
     CONF_RECONNECT_MAX,
+    CONF_SINGLE_SERVER,
     CONF_SK,
     CONF_STATUS_UPDATES,
     CONF_WS_URL1,
@@ -62,9 +64,11 @@ from .const import (
     CONVERSE_TIMEOUT,
     DEFAULT_API_ID,
     DEFAULT_HA_AGENT_ID,
+    DEFAULT_HEARTBEAT_FIRST_DELAY,
     DEFAULT_HEARTBEAT_INTERVAL,
     DEFAULT_LANGUAGE,
     DEFAULT_RECONNECT_MAX,
+    DEFAULT_SINGLE_SERVER,
     DEFAULT_STATUS_UPDATES,
     DEFAULT_WS_URL_1,
     DEFAULT_WS_URL_2,
@@ -278,6 +282,15 @@ async def async_setup_entry(
         data.get(CONF_HEARTBEAT_INTERVAL, DEFAULT_HEARTBEAT_INTERVAL),
     )
 
+    heartbeat_first_delay = options.get(
+        CONF_HEARTBEAT_FIRST_DELAY,
+        data.get(CONF_HEARTBEAT_FIRST_DELAY, DEFAULT_HEARTBEAT_FIRST_DELAY),
+    )
+    single_server = options.get(
+        CONF_SINGLE_SERVER,
+        data.get(CONF_SINGLE_SERVER, DEFAULT_SINGLE_SERVER),
+    )
+
     session_mgr = SessionManager()
     throttle = ThrottledLogger(_LOGGER, LOG_THROTTLE_COOLDOWN)
 
@@ -324,6 +337,8 @@ async def async_setup_entry(
         agent_id=data[CONF_AGENT_ID],
         reconnect_max=reconnect_max,
         heartbeat_interval=heartbeat_interval,
+        heartbeat_first_delay=heartbeat_first_delay,
+        single_server=single_server,
     )
 
     # Create WebSocket manager

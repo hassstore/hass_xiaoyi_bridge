@@ -15,6 +15,8 @@ CONF_HA_AGENT_ID = "ha_agent_id"
 CONF_STATUS_UPDATES = "status_updates"
 CONF_RECONNECT_MAX = "reconnect_max"
 CONF_HEARTBEAT_INTERVAL = "heartbeat_interval"
+CONF_HEARTBEAT_FIRST_DELAY = "heartbeat_first_delay"
+CONF_SINGLE_SERVER = "single_server"
 CONF_API_ID = "api_id"
 
 # ─── Defaults ───────────────────────────────────────────────────────────────
@@ -29,6 +31,12 @@ DEFAULT_RECONNECT_MAX = 50
 # 小艺服务端会关闭“长时间没有应用层心跳”的长连接，30s 会被动断连，
 # 这正是历史上心跳告警刷屏的根因之一。
 DEFAULT_HEARTBEAT_INTERVAL = 20
+# 连接建立后首拍延迟。默认 1s 让服务端尽快看到应用层流量；
+# 如果平台的连接需要“静默”一段时间（诊断用），可在选项里调大。
+DEFAULT_HEARTBEAT_FIRST_DELAY = 1
+# 只连接主端点（server1），失败才回退到备用端点。
+# 用于确认平台是否限制“同一智能体只能有一个会话”。
+DEFAULT_SINGLE_SERVER = False
 DEFAULT_API_ID = ""
 
 # async_converse() 接受的 HA 语言码（BCP 47）。选项值必须是小写翻译键，

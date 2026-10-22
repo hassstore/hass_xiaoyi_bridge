@@ -179,6 +179,8 @@ class XiaoYiWSConfig:
     agent_id: str
     reconnect_max: int = 50
     heartbeat_interval: float = 20.0
+    heartbeat_first_delay: float = 1.0
+    single_server: bool = False
 
 
 class XiaoYiWebSocketManager:
@@ -261,6 +263,9 @@ class XiaoYiWebSocketManager:
         # must not schedule a reconnect when it is cancelled for that reason.
         self._no_reconnect: set[ServerId] = set()
 
+        # Servers this manager is allowed to keep connected (see single_server).
+        self._active_servers: set[ServerId] = {"server1", "server2"}
+
         # Last close code/reason per server (surfaced in diagnostics).
         self._last_close: dict[ServerId, dict[str, Any]] = {}
 
@@ -316,6 +321,12 @@ class XiaoYiWebSocketManager:
 
         self._running = True
 
+        if self.config.single_server:
+            await self._connect_single_server()
+            return
+
+        self._active_servers = {"server1", "server2"}
+
         results = await asyncio.gather(
             self._connect_server(self.config.ws_url1, "server1"),
             self._connect_server(self.config.ws_url2, "server2"),
@@ -353,6 +364,34 @@ class XiaoYiWebSocketManager:
                 "partial_connect",
                 "Only one XiaoYi server is reachable; running degraded",
             )
+        self._notify_listeners()
+
+    async def _connect_single_server(self) -> None:
+        """Connect to the primary endpoint only, falling back to the backup.
+
+        Useful when the platform allows a single session per agent: holding two
+        connections then makes each one kick the other. A failed primary is
+        still retried periodically (the fallback stays active in the meantime).
+
+        Raises:
+            XiaoYiAuthError: The server rejected the credentials (401/403).
+            ConnectionError: Neither endpoint is reachable.
+        """
+        self._active_servers = {"server1"}
+        try:
+            await self._connect_server(self.config.ws_url1, "server1")
+        except XiaoYiAuthError:
+            raise
+        except Exception as err:  # noqa: BLE001 - fall back to the backup URL
+            self._throttle.warning(
+                "single_primary_failed",
+                "Primary XiaoYi endpoint is unreachable (%s); trying the backup",
+                err,
+            )
+            self._active_servers = {"server2"}
+            await self._connect_server(self.config.ws_url2, "server2")
+
+        _LOGGER.info("Connected in single-server mode: %s", self._active_servers)
         self._notify_listeners()
 
     async def disconnect(self) -> None:
@@ -430,6 +469,7 @@ class XiaoYiWebSocketManager:
         self._no_reconnect.clear()
         self._tls_degraded.clear()
         self._last_close.clear()
+        self._active_servers = {"server1", "server2"}
         self._throttle.reset()
         _LOGGER.info("Disconnected from all servers")
         self._notify_listeners()
@@ -698,7 +738,8 @@ class XiaoYiWebSocketManager:
             heartbeat = HeartbeatManager(
                 agent_id=self.config.agent_id,
                 interval=self.config.heartbeat_interval,
-                on_timeout=lambda sid=server_id: self._on_heartbeat_timeout(sid),
+                first_delay=self.config.heartbeat_first_delay,
+                on_timeout=lambda err=None, sid=server_id: self._on_heartbeat_timeout(sid, err),
                 throttle=self._throttle,
                 server_id=server_id,
             )
@@ -822,12 +863,20 @@ class XiaoYiWebSocketManager:
         finally:
             self._no_reconnect.discard(server_id)
 
-    async def _on_heartbeat_timeout(self, server_id: ServerId) -> None:
+    async def _on_heartbeat_timeout(
+        self, server_id: ServerId, err: BaseException | None = None
+    ) -> None:
         """Handle heartbeat timeout by reconnecting.
 
         Args:
             server_id: Server that timed out.
+            err: Exception raised by the failing heartbeat send, if any. The
+                close code it carries is the only clue when the server closes
+                the socket before the receive loop notices.
         """
+        if isinstance(err, ConnectionClosed):
+            # The socket died under us; record why before tearing it down.
+            self._log_close(server_id, err)
         self._throttle.warning(
             f"{server_id}/heartbeat_timeout",
             "[%s] Heartbeat timeout, reconnecting...",
@@ -1233,6 +1282,10 @@ class XiaoYiWebSocketManager:
         Args:
             server_id: Server to reconnect.
         """
+        if server_id not in self._active_servers:
+            # single_server mode: the other leg is deliberately not connected.
+            return
+
         # Paused after an auth failure — the cooldown task resumes us.
         pause_until = self._auth_pause_until.get(server_id)
         if pause_until and time.monotonic() < pause_until:

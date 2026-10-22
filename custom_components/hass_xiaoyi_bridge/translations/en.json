@@ -59,7 +59,9 @@
           "api_id": "Push API ID (for proactive notifications)",
           "status_updates": "Send processing status updates",
           "heartbeat_interval": "Heartbeat interval (seconds)",
-          "reconnect_max": "Maximum reconnection attempts"
+          "reconnect_max": "Maximum reconnection attempts",
+          "heartbeat_first_delay": "First heartbeat delay (seconds)",
+          "single_server": "Connect to the primary endpoint only"
         },
         "data_description": {
           "language": "Language passed to the Assist pipeline; leave on “Follow Home Assistant” unless 小艺 speaks a different language than your HA UI",
@@ -67,7 +69,9 @@
           "api_id": "API ID from the 小艺开放平台, required by the send_push service",
           "status_updates": "Send “processing” and “done” status messages back to 小艺",
           "heartbeat_interval": "Application heartbeat period; the XiaoYi server closes idle connections, so keep it at or below 30s",
-          "reconnect_max": "Attempts before the bridge pauses for 15 minutes and tries again"
+          "reconnect_max": "Attempts before the bridge pauses for 15 minutes and tries again",
+          "heartbeat_first_delay": "Delay before the first heartbeat after the connection is established (default 1 second). Only raise it when diagnosing disconnects that happen right after connecting.",
+          "single_server": "Use only the primary endpoint and fall back to the backup when it is unreachable. Enable it if the platform allows a single session per agent, so two connections do not kick each other."
         }
       }
     },

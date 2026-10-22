@@ -32,18 +32,22 @@ from .const import (
     CONF_AK,
     CONF_API_ID,
     CONF_HA_AGENT_ID,
+    CONF_HEARTBEAT_FIRST_DELAY,
     CONF_HEARTBEAT_INTERVAL,
     CONF_LANGUAGE,
     CONF_RECONNECT_MAX,
+    CONF_SINGLE_SERVER,
     CONF_SK,
     CONF_STATUS_UPDATES,
     CONF_WS_URL1,
     CONF_WS_URL2,
     DEFAULT_API_ID,
     DEFAULT_HA_AGENT_ID,
+    DEFAULT_HEARTBEAT_FIRST_DELAY,
     DEFAULT_HEARTBEAT_INTERVAL,
     DEFAULT_LANGUAGE,
     DEFAULT_RECONNECT_MAX,
+    DEFAULT_SINGLE_SERVER,
     DEFAULT_STATUS_UPDATES,
     DEFAULT_WS_URL_1,
     DEFAULT_WS_URL_2,
@@ -87,6 +91,14 @@ OPTIONS_SCHEMA = vol.Schema(
         vol.Optional(
             CONF_RECONNECT_MAX, default=DEFAULT_RECONNECT_MAX
         ): NumberSelector(NumberSelectorConfig(min=1, max=100, step=1)),
+        vol.Optional(
+            CONF_HEARTBEAT_FIRST_DELAY, default=DEFAULT_HEARTBEAT_FIRST_DELAY
+        ): NumberSelector(
+            NumberSelectorConfig(
+                min=0, max=60, step=1, unit_of_measurement=UnitOfTime.SECONDS
+            )
+        ),
+        vol.Optional(CONF_SINGLE_SERVER, default=DEFAULT_SINGLE_SERVER): bool,
     }
 )
 
@@ -378,6 +390,12 @@ class XiaoYiBridgeOptionsFlow(OptionsFlowWithReload):
                     ),
                     CONF_RECONNECT_MAX: options.get(
                         CONF_RECONNECT_MAX, DEFAULT_RECONNECT_MAX
+                    ),
+                    CONF_HEARTBEAT_FIRST_DELAY: options.get(
+                        CONF_HEARTBEAT_FIRST_DELAY, DEFAULT_HEARTBEAT_FIRST_DELAY
+                    ),
+                    CONF_SINGLE_SERVER: options.get(
+                        CONF_SINGLE_SERVER, DEFAULT_SINGLE_SERVER
                     ),
                 },
             ),
